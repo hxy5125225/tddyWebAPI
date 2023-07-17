@@ -1,0 +1,59 @@
+﻿
+
+namespace DBConnector.SQLServer
+{
+    [System.Security.SecuritySafeCritical]
+    public class DBTableInfo
+    {
+        private string colunmName;
+
+        private string colunmType;
+
+        private int colunmLength;
+
+        private string paramName;
+
+        private int scale;
+
+        public int Scale
+        {
+            get { return scale; }
+            set { scale = value; }
+        }
+
+        private int precision;
+
+        public int Precision
+        {
+            get { return precision; }
+            set { precision = value; }
+        }
+
+
+        public string ParamName
+        {
+            get { return paramName; }
+            set { paramName = value; }
+        }
+
+
+        public int ColunmLength
+        {
+            get { return colunmLength; }
+            set { colunmLength = value; }
+        }
+
+        public string ColunmType
+        {
+            get { return colunmType; }
+            set { colunmType = value; }
+        }
+
+        public string ColunmName
+        {
+            get { return colunmName; }
+            set { colunmName = value; }
+        }
+
+    }
+}

@@ -1,0 +1,89 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace DBConnector
+{
+    public class ConfigClass
+    {
+        public static string ServerDataIp { get { return "http://172.16.144.246/mygisserver/?request=SearchByConditionBatch&equipparams={%22equip%22:[{%22typeid%22:305000,%22oid%22:130000108631},{%22typeid%22:305000,%22oid%22:130000120112}]}&condition=%28sbtype%20=%20311000%20and%20fsbzlx%20in%20%2830000000%29%20%29%20&topoState=3"; } }
+        #region PG
+        /// <summary>
+        /// PG连接字符串
+        /// </summary>
+        public static string PGConString
+        {
+            get
+            {
+                return "Server=172.16.144.252;Port=19200;UserId=gis;Password=GIS20_sig;Database=fzgis;Encoding=UTF8";
+            }
+        }
+        public static string PG_QuerySql
+        {
+            get
+            {
+                return "WITH line_id AS ( SELECT 130000108631 AS cxkg UNION ALL SELECT 130000120112 AS cxkg ) SELECT * FROM ( SELECT 2022 AS 年份, cxkg, equips, oid, start_conn, end_conn, sbzlx, type, ST_asText (shape) AS shape, devicetype, ( CASE WHEN devicetype = 3 THEN '开关' || RIGHT (CAST(oid AS VARCHAR), 4) ELSE NULL END ) AS devicename, ( CASE WHEN devicetype = 3 THEN '未配置终端分段开关' ELSE NULL END ) AS blackname, ( CASE WHEN kgzt = 536870912 THEN 0 ELSE 1 END ) AS kgzt, sbid, xlcd FROM ( SELECT a.cxkg, a.equips, a.oid, split_part ( get_conn_str (CONNECTION), ',', 2 ) AS start_conn, split_part ( get_conn_str (CONNECTION), ',', 3 ) end_conn, sbzlx, '柱上-断路器' AS type, 3 AS devicetype, shape, kgzt, CAST (NULL AS bigint) AS ssdz, b.sbid, 0.0 AS xlcd FROM ( SELECT * FROM topo_zyxl.topo_sb_oid WHERE typeid = 111000 AND cxkg IN (SELECT cxkg FROM line_id)) a LEFT JOIN dwzy.T_TX_ZWYC_ZSDLQ b ON a.oid = b.oid UNION ALL SELECT a.cxkg, a.equips, a.oid, split_part(get_conn_str(CONNECTION), ',', 2) AS start_conn, split_part ( get_conn_str(CONNECTION), ',', 3 ) end_conn, sbzlx, '站外-超连接线' AS type, 2 AS devicetype, shape, NULL AS kgzt, NULL AS ssdz, b.sbid, 0 AS xlcd FROM(SELECT * FROM topo_zyxl.topo_sb_oid WHERE typeid = 140000 AND cxkg IN(SELECT cxkg FROM line_id)) a LEFT JOIN dwzy.T_TX_ZWYC_ZWCLJX b ON a.oid = b.oid UNION ALL SELECT a.cxkg, a.equips, a.oid, split_part(get_conn_str(CONNECTION), ',', 2) AS start_conn, split_part ( get_conn_str(CONNECTION), ',', 3 ) end_conn, sbzlx, '站外-连接线' AS type, 2 AS devicetype, shape, NULL AS kgzt, NULL AS ssdz, b.sbid, 0 AS xlcd FROM(SELECT * FROM topo_zyxl.topo_sb_oid WHERE typeid = 130000 AND cxkg IN(SELECT cxkg FROM line_id)) a LEFT JOIN dwzy.T_TX_ZWYC_ZWLJX b ON a.oid = b.oid UNION ALL SELECT a.cxkg, a.equips, a.oid, split_part(get_conn_str(CONNECTION), ',', 2) AS start_conn, split_part ( get_conn_str(CONNECTION), ',', 3 ) end_conn, sbzlx, '站外-电缆段' AS type, 2 AS devicetype, shape, NULL AS kgzt, NULL AS ssdz, b.sbid, ST_Length(shape) AS xlcd FROM(SELECT * FROM topo_zyxl.topo_sb_oid WHERE typeid = 201000 AND chkg IN(SELECT chkg FROM line_id)) a LEFT JOIN dwzy.T_TX_ZWYC_DLD b ON a.oid = b.oid UNION ALL SELECT a.chkg, a.equips, a.oid, split_part(get_conn_str(CONNECTION), ',', 2) AS start_conn, split_part ( get_conn_str(CONNECTION), ',', 3 ) end_conn, sbzlx, '导线段' AS type, 2 AS devicetype, shape, NULL AS kgzt, NULL AS ssdz, b.sbid, ST_Length(shape) AS xlcd FROM(SELECT * FROM topo_zyxl.topo_sb_oid WHERE typeid = 101000 AND chkg IN(SELECT chkg FROM line_id)) a LEFT JOIN dwzy.T_TX_ZWYC_DXD b ON a.oid = b.oid UNION ALL SELECT a.chkg, a.equips, a.oid, split_part(get_conn_str(CONNECTION), ',', 2) AS start_conn, split_part ( get_conn_str(CONNECTION), ',', 3 ) end_conn, sbzlx, '柱上-隔离开关' AS type, 2 AS devicetype, shape, NULL AS kgzt, NULL AS ssdz, b.sbid, 0 AS xlcd FROM(SELECT * FROM topo_zyxl.topo_sb_oid WHERE typeid = 113000 AND chkg IN(SELECT chkg FROM line_id)) a LEFT JOIN dwzy.T_TX_ZWYC_ZSGLKG b ON a.oid = b.oid UNION ALL SELECT a.chkg, a.equips, a.oid, split_part(get_conn_str(CONNECTION), ',', 2) AS start_conn, split_part ( get_conn_str(CONNECTION), ',', 3 ) end_conn, sbzlx, '柱上-负荷开关' AS type, 3 AS devicetype, shape, kgzt, NULL AS ssdz, b.sbid, 0 AS xlcd FROM(SELECT * FROM topo_zyxl.topo_sb_oid WHERE typeid = 112000 AND chkg IN(SELECT chkg FROM line_id)) a LEFT JOIN dwzy.T_TX_ZWYC_ZSFHKG b ON a.oid = b.oid UNION ALL SELECT a.chkg, a.equips, a.oid, split_part(get_conn_str(CONNECTION), ',', 2) AS start_conn, split_part ( get_conn_str(CONNECTION), ',', 3 ) end_conn, sbzlx, '柱上-跌落式熔断器' AS type, 2 AS devicetype, shape, NULL AS kgzt, NULL AS ssdz, b.sbid, 0 AS xlcd FROM(SELECT * FROM topo_zyxl.topo_sb_oid WHERE typeid = 115000 AND chkg IN(SELECT chkg FROM line_id)) a LEFT JOIN dwzy.T_TX_ZWYC_ZSDLSRDQ b ON a.oid = b.oid UNION ALL SELECT a.chkg, a.equips, a.oid, split_part(get_conn_str(b.CONNECTION), ',', 2) AS start_conn, split_part ( get_conn_str(b.CONNECTION), ',', 3 ) end_conn, b.sbzlx, '站内-连接线' AS type, 2 AS devicetype, b.shape, NULL AS kgzt, b.ssdz, b.sbid, 0 AS xlcd FROM(SELECT * FROM topo_zyxl.topo_sb_oid WHERE typeid = 360000 AND chkg IN(SELECT chkg FROM line_id)) a LEFT JOIN dwzy.T_TX_ZNYC_ZNLJX b ON a.oid = b.oid UNION ALL SELECT a.chkg, a.equips, a.oid, split_part(get_conn_str(b.CONNECTION), ',', 2) AS start_conn, split_part ( get_conn_str(b.CONNECTION), ',', 3 ) end_conn, b.sbzlx, '站内-断路器' AS type, ( CASE WHEN C.sbzlx = 30000000 THEN 2 ELSE 7 END ) AS devicetype, b.shape, NULL AS kgzt, b.ssdz, b.sbid, 0 AS xlcd FROM(SELECT * FROM topo_zyxl.topo_sb_oid WHERE typeid = 305000 AND chkg IN(SELECT chkg FROM line_id)) a LEFT JOIN dwzy.T_TX_ZNYC_DLQ b ON a.oid = b.oid LEFT JOIN dwzy.T_TX_ZNYC_DZ c ON b.ssdz = c.oid UNION ALL SELECT a.chkg, a.equips, a.oid, split_part(get_conn_str(b.CONNECTION), ',', 2) AS start_conn, split_part ( get_conn_str(b.CONNECTION), ',', 3 ) end_conn, b.sbzlx, '站内-隔离开关' AS type, 2 AS devicetype, b.shape, kgzt, b.ssdz, b.sbid, 0 AS xlcd FROM(SELECT * FROM topo_zyxl.topo_sb_oid WHERE typeid = 306000 AND chkg IN(SELECT chkg FROM line_id)) a INNER JOIN dwzy.T_TX_ZNYC_GLKG b ON a.oid = b.oid AND(b.sbzlx = 36000000 OR b.sbzlx = 30600000) UNION ALL SELECT a.chkg, a.equips, a.oid, split_part(get_conn_str(b.CONNECTION), ',', 2) AS start_conn, split_part ( get_conn_str(b.CONNECTION), ',', 3 ) end_conn, b.sbzlx, '站内-负荷开关' AS type, 7 AS devicetype, b.shape, kgzt, b.ssdz, b.sbid, 0 AS xlcd FROM(SELECT * FROM topo_zyxl.topo_sb_oid WHERE typeid = 307000 AND chkg IN(SELECT chkg FROM line_id)) a INNER JOIN dwzy.t_tx_znyc_fhkg b ON a.oid = b.oid AND b.sbzlx = 30700000 UNION ALL SELECT a.chkg, a.equips, a.oid, split_part(get_conn_str(b.CONNECTION), ',', 2) AS start_conn, split_part ( get_conn_str(b.CONNECTION), ',', 3 ) end_conn, b.sbzlx, '站外-柱上变压器' AS type, 5 AS devicetype, b.shape, NULL AS kgzt, NULL AS ssdz, b.sbid, 0 AS xlcd FROM(SELECT * FROM topo_zyxl.topo_sb_oid WHERE typeid = 110000 AND chkg IN(SELECT chkg FROM line_id)) a LEFT JOIN dwzy.t_tx_zwyc_zsbyq b ON a.oid = b.oid ) c ) e";
+            }
+        }
+        /// <summary>
+        /// 查询变电站
+        /// </summary>
+        public static string PG_QuerySql_Substation
+        {
+            get
+            {
+                return "with bdz_info as (select oid, sbmc, sbid, st_centroid(shape) as shape from dwzy.T_TX_ZNYC_DZ where sbzlx = 30000000 and oid in (120000075028, 120000075029, 120000075030)) select A.oid as bdz_id,A.sbmc as bdz_mc,A.sbid as bdz_sbid,B.oid as xl_oid,B.cxkg as xl_cxkg,B.cxkglx as xl_cxkglx,B.cxjg as xl_cxjg,B.sbmc as xl_mc,cast(null as text) as shape,1 as devicetype from bdz_info A inner join dwzy.T_TX_ZWYC_XL B on A.oid = B.qsdz and B.dydj = 22 union all select oid as bdz_id,sbmc as bdz_mc,sbid as bdz_sbid,null as xl_oid,null as xl_cxkg,null as xl_cxkglx,null as xl_cxjg,null as xl_mc,st_astext(st_centroid(shape)) as shape,0 as devicetype from bdz_info; ";
+            }
+        }
+        /// <summary>
+        /// 查询馈线
+        /// </summary>
+        public static string PG_QuerySql_Feeder
+        {
+            get
+            {
+                return "with line_info as (select oid, cxkg, cxkglx, cxjg, sbmc, qsdz from dwzy.T_TX_ZWYC_XL where dydj = 22 and cxkg in (120000109511, 120000097278, 120000097369)) select B.oid as bdz_id,B.sbmc as bdz_mc,B.sbid as bdz_sbid,null as xl_oid,null as xl_cxkg,null as xl_cxkglx,null as xl_cxjg,null as xl_mc,st_centroid(shape) as shape,0 as devicetype from (select distinct qsdz from line_info) A inner join dwzy.T_TX_ZNYC_DZ B on A.qsdz = B.oid union all select B.oid as bdz_id,B.sbmc as bdz_mc,B.sbid as bdz_sbid,A.oid as xl_oid,A.cxkg as xl_cxkg,A.cxkglx as xl_cxkglx,A.cxjg as xl_cxjg,A.sbmc as xl_mc,null as shape,1 as devicetype from line_info A inner join dwzy.T_TX_ZNYC_DZ B on A.qsdz = B.oid; ";
+            }
+        }
+        public static string PG_InsertSql
+        {
+            get
+            {
+                return "INSERT INTO topo_zyxl.topo_sb_oid (oid,equips,typeid,chkg,deleted)VALUES('{0}','{1}','{2}','{3}','{4}')";
+            }
+        }
+        /// <summary>
+        /// 创建临时表
+        /// </summary>
+        public static string PG_CreateTempTable
+        {
+            get
+            {
+                return "create temporary table topo_sb_line_oid(oid bigint,equips varchar(200),typeid bigint,cxkg bigint) ;";
+            }
+        }
+        public static string Query_Columns { get { return "SELECT *  FROM {0} LIMIT 1"; } }
+        public static string PG_Qurey_XDXX { get { return "SELECT 2022 AS 年份, cxkg, equips, oid, (((0 :: BIT(64)) | get_byte (CONNECTION, 1) :: BIT (64) << 0 ) | ( get_byte (CONNECTION, 2) :: BIT (64) << 8 ) | ( get_byte (CONNECTION, 3) :: BIT (64) << 16 ) | ( get_byte (CONNECTION, 4) :: BIT (64) << 24 ) | ( get_byte (CONNECTION, 5) :: BIT (64) << 32 ) | ( get_byte (CONNECTION, 6) :: BIT (64) << 40 ) | ( get_byte (CONNECTION, 7) :: BIT (64) << 48 ) | ( get_byte (CONNECTION, 8) :: BIT (64) << 56 )) :: int8 AS start_conn, (((0 :: BIT(64)) | get_byte (CONNECTION, 9) :: BIT (64) << 0 ) | ( get_byte (CONNECTION, 10) :: BIT (64) << 8 ) | ( get_byte (CONNECTION, 11) :: BIT (64) << 16 ) | ( get_byte (CONNECTION, 12) :: BIT (64) << 24 ) | ( get_byte (CONNECTION, 13) :: BIT (64) << 32 ) | ( get_byte (CONNECTION, 14) :: BIT (64) << 40 ) | ( get_byte (CONNECTION, 15) :: BIT (64) << 48 ) | ( get_byte (CONNECTION, 16) :: BIT (64) << 56 )) :: int8 AS end_conn, sbzlx, type, 'LINESTRING(1 1, 2 2)' AS shape, devicetype, ( CASE WHEN devicetype = 3 THEN '开关' || RIGHT (CAST(oid AS VARCHAR), 4) ELSE NULL END ) AS devicename, ( CASE WHEN devicetype = 3 THEN '未配置终端分段开关' ELSE NULL END ) AS blackname, ( CASE WHEN kgzt = 536870912 THEN 0 ELSE 1 END ) AS kgzt, sbid, xlcd, pdts, pdrl, pdfh FROM ( SELECT a.cxkg, a.equips, a.oid, b. CONNECTION, b.sbzlx, '柱上-断路器' AS type, 3 AS devicetype, b.shape, b.kgzt, CAST (NULL AS bigint) AS ssdz, b.sbid, 0.0 AS xlcd, 0 AS pdts, 0 AS pdrl, 0 pdfh FROM ( SELECT * FROM topo_zyxl.topo_sb_oid WHERE typeid = 111000 ) a INNER JOIN dwzy.T_TX_ZWYC_ZSDLQ b ON a.oid = b.oid AND b. CONNECTION IS NOT NULL UNION ALL SELECT a.cxkg, a.equips, a.oid, CONNECTION, sbzlx, '站外-超连接线' AS type, 2 AS devicetype, shape, NULL AS kgzt, NULL AS ssdz, b.sbid, 0 AS xlcd, 0 AS pdts, 0 AS pdrl, 0 pdfh FROM ( SELECT * FROM topo_zyxl.topo_sb_oid WHERE typeid = 140000 ) a INNER JOIN dwzy.T_TX_ZWYC_ZWCLJX b ON a.oid = b.oid AND b. CONNECTION IS NOT NULL UNION ALL SELECT a.cxkg, a.equips, a.oid, CONNECTION, sbzlx, '站外-连接线' AS type, 2 AS devicetype, shape, NULL AS kgzt, NULL AS ssdz, b.sbid, 0 AS xlcd, 0 AS pdts, 0 AS pdrl, 0 pdfh FROM ( SELECT * FROM topo_zyxl.topo_sb_oid WHERE typeid = 130000 ) a INNER JOIN dwzy.T_TX_ZWYC_ZWLJX b ON a.oid = b.oid AND b. CONNECTION IS NOT NULL UNION ALL SELECT a.cxkg, a.equips, a.oid, CONNECTION, sbzlx, '站外-电缆段' AS type, 2 AS devicetype, shape, NULL AS kgzt, NULL AS ssdz, b.sbid, ST_Length (shape) AS xlcd, 0 AS pdts, 0 AS pdrl, 0 pdfh FROM ( SELECT * FROM topo_zyxl.topo_sb_oid WHERE typeid = 201000 ) a INNER JOIN dwzy.T_TX_ZWYC_DLD b ON a.oid = b.oid AND b. CONNECTION IS NOT NULL UNION ALL SELECT a.cxkg, a.equips, a.oid, CONNECTION, sbzlx, '导线段' AS type, 2 AS devicetype, shape, NULL AS kgzt, NULL AS ssdz, b.sbid, ST_Length (shape) AS xlcd, 0 AS pdts, 0 AS pdrl, 0 pdfh FROM ( SELECT * FROM topo_zyxl.topo_sb_oid WHERE typeid = 101000 ) a INNER JOIN dwzy.T_TX_ZWYC_DXD b ON a.oid = b.oid AND b. CONNECTION IS NOT NULL UNION ALL SELECT a.cxkg, a.equips, a.oid, CONNECTION, sbzlx, '柱上-隔离开关' AS type, 2 AS devicetype, shape, NULL AS kgzt, NULL AS ssdz, b.sbid, 0 AS xlcd, 0 AS pdts, 0 AS pdrl, 0 pdfh FROM ( SELECT * FROM topo_zyxl.topo_sb_oid WHERE typeid = 113000 ) a INNER JOIN dwzy.T_TX_ZWYC_ZSGLKG b ON a.oid = b.oid AND b. CONNECTION IS NOT NULL UNION ALL SELECT a.cxkg, a.equips, a.oid, CONNECTION, sbzlx, '柱上-负荷开关' AS type, 3 AS devicetype, shape, kgzt, NULL AS ssdz, b.sbid, 0 AS xlcd, 0 AS pdts, 0 AS pdrl, 0 pdfh FROM ( SELECT * FROM topo_zyxl.topo_sb_oid WHERE typeid = 112000 ) a INNER JOIN dwzy.T_TX_ZWYC_ZSFHKG b ON a.oid = b.oid AND b. CONNECTION IS NOT NULL UNION ALL SELECT a.cxkg, a.equips, a.oid, CONNECTION, sbzlx, '柱上-跌落式熔断器' AS type, 2 AS devicetype, shape, NULL AS kgzt, NULL AS ssdz, b.sbid, 0 AS xlcd, 0 AS pdts, 0 AS pdrl, 0 pdfh FROM ( SELECT * FROM topo_zyxl.topo_sb_oid WHERE typeid = 115000 ) a INNER JOIN dwzy.T_TX_ZWYC_ZSDLSRDQ b ON a.oid = b.oid AND b. CONNECTION IS NOT NULL UNION ALL SELECT a.cxkg, a.equips, a.oid, b. CONNECTION, b.sbzlx, '站内-连接线' AS type, 2 AS devicetype, b.shape, NULL AS kgzt, b.ssdz, b.sbid, 0 AS xlcd, 0 AS pdts, 0 AS pdrl, 0 pdfh FROM ( SELECT * FROM topo_zyxl.topo_sb_oid WHERE typeid = 360000 ) a INNER JOIN dwzy.T_TX_ZNYC_ZNLJX b ON a.oid = b.oid AND b. CONNECTION IS NOT NULL UNION ALL SELECT a.cxkg, a.equips, a.oid, b. CONNECTION, b.sbzlx, '站内-断路器' AS type, ( CASE WHEN C.sbzlx = 30000000 THEN 2 ELSE 7 END ) AS devicetype, b.shape, NULL AS kgzt, b.ssdz, b.sbid, 0 AS xlcd, 0 AS pdts, 0 AS pdrl, 0 pdfh FROM ( SELECT * FROM topo_zyxl.topo_sb_oid WHERE typeid = 305000 ) a INNER JOIN dwzy.T_TX_ZNYC_DLQ b ON a.oid = b.oid AND b. CONNECTION IS NOT NULL LEFT JOIN dwzy.T_TX_ZNYC_DZ c ON b.ssdz = c.oid UNION ALL SELECT a.cxkg, a.equips, a.oid, CONNECTION, b.sbzlx, '站内-隔离开关' AS type, 2 AS devicetype, b.shape, kgzt, b.ssdz, b.sbid, 0 AS xlcd, 0 AS pdts, 0 AS pdrl, 0 pdfh FROM ( SELECT * FROM topo_zyxl.topo_sb_oid WHERE typeid = 306000 ) a INNER JOIN dwzy.T_TX_ZNYC_GLKG b ON a.oid = b.oid AND ( b.sbzlx = 36000000 OR b.sbzlx = 30600000 ) AND b. CONNECTION IS NOT NULL AND length (b. CONNECTION) > 9 UNION ALL SELECT a.cxkg, a.equips, a.oid, CONNECTION, b.sbzlx, '站内-负荷开关' AS type, 7 AS devicetype, b.shape, kgzt, b.ssdz, b.sbid, 0 AS xlcd, 0 AS pdts, 0 AS pdrl, 0 pdfh FROM ( SELECT * FROM topo_zyxl.topo_sb_oid WHERE typeid = 307000 ) a INNER JOIN dwzy.t_tx_znyc_fhkg b ON a.oid = b.oid AND b.sbzlx = 30700000 AND b. CONNECTION IS NOT NULL UNION ALL SELECT a.cxkg, a.equips, a.oid, CONNECTION, b.sbzlx, '站外-柱上变压器' AS type, 5 AS devicetype, b.shape, NULL AS kgzt, NULL AS ssdz, b.sbid, 0 AS xlcd, 1 AS pdts, 300 AS pdrl, 1.1 pdfh FROM ( SELECT * FROM topo_zyxl.topo_sb_oid WHERE typeid = 110000 ) a INNER JOIN dwzy.t_tx_zwyc_zsbyq b ON a.oid = b.oid AND b. CONNECTION IS NOT NULL ) c"; } }
+        public static string PG_Qurey_KGXX { get { return "SELECT A.cxkg, A.equips, A.oid, (((0 :: BIT(64)) | get_byte (B. CONNECTION, 1) :: BIT (64) << 0 ) | ( get_byte (B. CONNECTION, 2) :: BIT (64) << 8 ) | ( get_byte (B. CONNECTION, 3) :: BIT (64) << 16 ) | ( get_byte (B. CONNECTION, 4) :: BIT (64) << 24 ) | ( get_byte (B. CONNECTION, 5) :: BIT (64) << 32 ) | ( get_byte (B. CONNECTION, 6) :: BIT (64) << 40 ) | ( get_byte (B. CONNECTION, 7) :: BIT (64) << 48 ) | ( get_byte (B. CONNECTION, 8) :: BIT (64) << 56 )) :: int8 AS start_conn, B.ssdz, ( CASE WHEN C.sbzlx IN (30000004, 32400000) THEN 4 ELSE 5 END ) AS devicetype, ( CASE WHEN C.sbzlx = 30000004 THEN '三遥开关站' WHEN C.sbzlx = 32400000 THEN '三遥环网单元' WHEN C.sbzlx = 32300000 THEN '箱变' ELSE '配电室' END ) AS blackname, C.sbmc AS devicename FROM ( SELECT * FROM topo_zyxl.topo_sb_oid WHERE typeid = 311000 ) A INNER JOIN dwzy.t_tx_znyc_mx B ON A.oid = B.oid INNER JOIN dwzy.t_tx_znyc_DZ C ON B.ssdz = C.oid AND C.sbzlx IN ( 30000004, 32300000, 32400000, 30000005, 30000006, 34300000 )"; } }
+        #endregion  
+        public static string DestinationTableName { get { return "topo_zyxl.topo_xl_ceshi"; } }
+
+        #region Oracle
+        /// <summary>
+        /// Oracle连接字符串
+        /// </summary>
+        public static string OracleConString
+        {
+            get
+            {
+                return "Data Source=(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=172.16.144.251)(PORT=11521))(CONNECT_DATA=(SERVICE_NAME=pis)));Persist Security Info=True;User ID=pis;Password=New_2#4dba;";
+            }
+        }
+        public static string Oracle_QuerySubSql { get { return "SELECT A.dwzy_id, A.run_trans_num, A.OBJ_ID, A.zrl, A.rlgc, C.max_load FROM ( SELECT A.dwzy_id, A.run_trans_num, A.VOLT_LEVEL, A.OBJ_ID, SUM (B.HVC) AS zrl, listagg ( rtrim( to_char (B.HVC, 'FM9999990.9999'), '.' ), '+' ) within GROUP (ORDER BY B.HVC) AS rlgc FROM EQU_PI_SUBSTATION A INNER JOIN EQU_TE_TRANSFORMER B ON A.dwzy_id IS NOT NULL AND A.OBJ_ID = B.STATION_ID AND A.VOLT_LEVEL IN ( 'AC00351', 'AC01101', 'AC02201' ) AND A.ASSET_TYPE = 30 GROUP BY A.dwzy_id, A.run_trans_num, A.VOLT_LEVEL, A.OBJ_ID ) A LEFT JOIN ieq_te_st_data_detail C ON A.OBJ_ID = C.DEVICE_ID AND periods = 2015"; } }
+
+        public static string Oracle_QueryFeederSql { get { return ""; } }
+        #endregion
+    }
+}

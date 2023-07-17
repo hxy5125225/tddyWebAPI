@@ -1,0 +1,617 @@
+﻿
+
+using Npgsql;
+using System;
+using System.Collections.Generic;
+using System.Data;
+using System.Data.SqlClient;
+using System.Linq;
+
+
+namespace DBConnector.SQLServer
+{
+    [System.Security.SecuritySafeCritical]
+    public  class TddyLocalDBHelper
+    {
+        public static int BatchSize = 2000;
+        public static List<string> checks = new List<string>();
+        public static string CHECK_TYPE_NO_GUID = "SELECT col.name as 列名,ISNULL(ep.[value], '') AS 列说明,type.name as 数据类型,sysCol.is_computed as 是否计算字段,sysCol.max_length 字段长度,sysCol.precision,sysCol.Scale FROM syscolumns col LEFT JOIN systypes type ON type.xtype=col.xtype LEFT JOIN sys.columns sysCol ON sysCol.name=col.name and sysCol.object_id=col.id LEFT JOIN sys.extended_properties ep ON col.id=ep.major_id AND col.colid=ep.minor_id AND ep.name='MS_Description' WHERE id=object_id('{0}') AND type.name not in ('uniqueidentifier') and sysCol.is_computed=0 ";
+        public static string ConnectionString = "Server=(LocalDB)\\dwgh;Initial Catalog={0};Integrated Security=true";
+        public static string ConnectionString_TRUE = "Server=(LocalDB)\\dwgh; Initial Catalog={0};Integrated Security=true";
+        public static string ConnectionString_Path = "Server=(LocalDB)\\dwgh; Integrated Security=true ;AttachDbFileName={0}";
+        public static string ConnectionStringServer = "Server={0},1433\\SQLEXPRESS;Initial Catalog=dwghcloud;User Id={1};Password={2}";
+        public static Dictionary<string, SqlConnection> dic_dbcs = new Dictionary<string, SqlConnection>();
+        public static SqlConnection connection = null;
+        
+        /// <summary>
+        /// 超时时间
+        /// </summary>
+        public static int CommandTimeOut = 0;
+
+        //提交并关闭连接和事务
+        public static void TddyCommit(SqlTransaction transaction)
+        {
+            try
+            {
+                transaction.Commit();
+                if (transaction != null)
+                {
+                    transaction.Dispose();
+                }
+            }
+            catch (System.Exception ex) { }
+        }
+        public static void CloseDb()
+        {
+            try
+            {
+                List<string> keys = dic_dbcs.Keys.ToList();
+                for (int i = 0; i < keys.Count; i++)
+                {
+                    if (dic_dbcs.ContainsKey(keys[i]))
+                    {
+                        connection = dic_dbcs[keys[i]];
+                        if (connection == null)
+                        {
+                            connection.Close();
+                            connection.Dispose();
+                        }
+                    }
+                }
+            }
+            catch (System.Exception ex) { }
+        }
+        //关闭事务
+        public static void CloseTrans(SqlTransaction transaction)
+        {
+            try
+            {
+                if (transaction != null)
+                {
+                    transaction.Dispose();
+                }
+            }
+            catch (System.Exception ex) { }
+        }
+
+        
+        //调用前先调用该方法启动连接和事务
+        public static SqlConnection InitSqlConnection(string connectionString, string DatabaseName,int context)
+        {
+           
+            if (string.IsNullOrEmpty(connectionString))
+            {
+                return connection;
+            }
+            string key = "天地电研";
+            if ((DatabaseName != null&& !connectionString.Contains("天地电研")) || context==0)
+            {
+                key = DatabaseName;
+            }
+            else if (connectionString.Contains("master"))
+            {
+                key = "master";
+            }
+            if (dic_dbcs.ContainsKey(key))
+            {
+                connection = dic_dbcs[key];
+                if(context==1&& !connection.ConnectionString.Contains(key))
+                {
+                    connection = new SqlConnection(connectionString);
+                    dic_dbcs.Remove(key);
+                    if (connection.State != ConnectionState.Open)
+                    {
+                        try
+                        {
+                            connection.Open();
+                            dic_dbcs.Add(key, connection);
+                        }
+                        catch (System.Exception ex) { }
+                    }
+                }
+                if (connection == null)
+                {
+                    connection.Open();
+                    dic_dbcs[key] = connection;
+                }
+            }
+            else
+            {
+                if (context == 0)
+                {
+                    connection= new SqlConnection("context connection=true");
+                   // connection = new SqlConnection(connectionString);
+                }
+                else
+                {
+                    connection = new SqlConnection(connectionString);
+                }
+                if (connection.State != ConnectionState.Open)
+                {
+                    try
+                    {
+                        connection.Open();
+                        dic_dbcs.Add(key, connection);
+                    }
+                    catch (System.Exception ex) {  }
+                }
+            }
+            return connection;
+        }
+
+        public static SqlConnection InitServerSqlConnection(string connectionString, string DatabaseName,int context)
+        {
+
+            if (string.IsNullOrEmpty(connectionString))
+            {
+                return connection;
+            }
+            string key = "Server" + DatabaseName;
+            bool hasConn = false;
+            if (dic_dbcs.ContainsKey(key))
+            {
+                connection = dic_dbcs[key];
+                if (connection == null)
+                {
+                    hasConn = false;
+                }
+                else 
+                {
+                    hasConn = true;
+                    if (connection.State != ConnectionState.Open) 
+                    {
+                        try { connection.Open(); }
+                        catch 
+                        {
+                            hasConn = false;
+                        }
+                    }
+                }
+            }
+            if (!hasConn) 
+            {
+                if (context == 0)
+                {
+                    connection = new SqlConnection("context connection=true");
+                }
+                else
+                {
+                    connection = new SqlConnection(connectionString);
+                }
+                if (connection.State != ConnectionState.Open)
+                {
+                    try
+                    {
+                        connection.Open();
+                        dic_dbcs.Remove(key);
+                        dic_dbcs.Add(key, connection);
+                    }
+                    catch (System.Exception ex) { }
+                }
+            }
+            return connection;
+        }
+
+        public static SqlTransaction InitSqlTransaction(SqlConnection connection)
+        {
+            SqlTransaction transaction = null;
+            if (connection.State != ConnectionState.Open)
+            {
+                try
+                {
+                    connection.Open();
+                    transaction = connection.BeginTransaction();
+                }
+                catch (System.Exception ex) { }
+            }
+            else
+            {
+                transaction = connection.BeginTransaction();
+            }
+            return transaction;
+        }
+
+        /// <summary>
+        /// 批量提交数据
+        /// </summary>
+        /// <param name="sqls"></param>
+        /// <param name="connectionString"></param>
+        /// <returns></returns>
+        public static bool BatchExecuteTddyNonQuery(SqlConnection connection, SqlTransaction transaction, List<string> sqls)
+        {
+            bool state = false;
+            try
+            {
+                if (connection.State != ConnectionState.Open)
+                {
+                    connection.Open();
+                }
+                SqlCommand cmd = new SqlCommand();
+                if (transaction != null)
+                {
+                    cmd.Transaction = transaction;
+                }
+                cmd.Connection = connection;
+                cmd.CommandType = CommandType.Text;
+                cmd.CommandTimeout = 0;
+                for (int i = 0; i < sqls.Count; i++)
+                {
+                    if (!string.IsNullOrEmpty(sqls[i].ToString()))
+                    {
+                        cmd.CommandText = sqls[i].ToString();
+                        cmd.ExecuteNonQuery();
+                    }
+                }
+                state = true;
+            }
+            catch (Exception e)
+            {
+
+            }
+            return state;
+        }
+
+       
+
+
+        
+        public static int ExecuteNonQuery(SqlTransaction transaction, CommandType commandType, string commandText, params SqlParameter[] parms)
+        {
+            return ExecuteNonQuery(transaction.Connection, transaction, commandType, commandText, parms);
+        }
+        public static int ExecuteTddyNonQuery(SqlConnection connection, SqlTransaction transaction, string commandText, params SqlParameter[] parms)
+        {
+            return ExecuteNonQuery(connection, transaction, CommandType.Text, commandText, parms);
+        }
+        public static int ExecuteTddyNonQuery(SqlConnection connection, SqlTransaction transaction, CommandType commandType, string commandText, params SqlParameter[] parms)
+        {
+            return ExecuteNonQuery(connection, transaction, commandType, commandText, parms);
+        }
+
+        public static SqlCommand ExecuteTddyNonQueryRetValue ( SqlConnection connection , SqlTransaction transaction , CommandType commandType , string commandText , params SqlParameter [ ] parms )
+        {
+            return ExecuteNonQueryWithReValue ( connection , transaction , commandType , commandText , parms );
+        }
+        private static void PrepareCommand(SqlCommand command, SqlConnection connection, SqlTransaction transaction, CommandType commandType, string commandText, SqlParameter[] parms)
+        {
+            try
+            {
+                if (connection.State != ConnectionState.Open) connection.Open();
+
+                command.Connection = connection;
+                command.CommandTimeout = CommandTimeOut;
+                // 设置命令文本(存储过程名或SQL语句)
+                command.CommandText = commandText;
+                // 分配事务
+                if (transaction != null)
+                {
+                    command.Transaction = transaction;
+                }
+                // 设置命令类型.
+               
+                command.CommandType = commandType;
+                if (parms != null && parms.Length > 0)
+                {
+                    //预处理SqlParameter参数数组，将为NULL的参数赋值为DBNull.Value;
+                    foreach (SqlParameter parameter in parms)
+                    {
+                        if ((parameter.Direction == ParameterDirection.InputOutput || parameter.Direction == ParameterDirection.Input) && (parameter.Value == null))
+                        {
+                            parameter.Value = DBNull.Value;
+                        }
+                        //command.Parameters.Add(parameter);
+                    }
+                    command.Parameters.AddRange(parms);
+                }
+            }
+            catch (System.Exception ex) { throw ex; }
+        }
+        /// <summary>
+        /// 执行SQL语句,返回影响的行数
+        /// </summary>
+        /// <param name="connection">数据库连接</param>
+        /// <param name="transaction">事务</param>
+        /// <param name="commandType">命令类型(存储过程,命令文本, 其它.)</param>
+        /// <param name="commandText">SQL语句或存储过程名称</param>
+        /// <param name="parms">查询参数</param>
+        /// <returns>返回影响的行数</returns>
+        private static int ExecuteNonQuery(SqlConnection connection, SqlTransaction transaction, CommandType commandType, string commandText, params SqlParameter[] parms)
+        {
+            int retval = -1;
+            try
+            {
+                SqlCommand command = new SqlCommand();
+                PrepareCommand(command, connection, transaction, commandType, commandText, parms);
+                retval = command.ExecuteNonQuery();
+                command.Parameters.Clear();
+            }
+            catch(Exception ex)
+            {
+                if (!commandText.Contains("Proc_DropUndoTable"))
+                {
+                  
+                }
+            }
+            return retval;
+        }
+
+        private static SqlCommand ExecuteNonQueryWithReValue ( SqlConnection connection , SqlTransaction transaction , CommandType commandType , string commandText , params SqlParameter [ ] parms )
+        {
+            int retval = -1;
+            SqlCommand command = new SqlCommand ( );
+            try
+            {
+                PrepareCommand ( command , connection , transaction , commandType , commandText , parms );
+                retval = command.ExecuteNonQuery ( );
+            }
+            catch ( Exception ex )
+            {
+                if ( !commandText.Contains ( "Proc_DropUndoTable" ) )
+                {
+                   
+                }
+            }
+            return command;
+        } 
+       
+        public static DataTable ExecuteDataTable(SqlConnection connection, CommandType commandType, string commandText, params SqlParameter[] parms)
+        {
+            return ExecuteDataSet(connection, commandType, commandText, parms).Tables[0];
+        }
+
+        /// <summary>
+        /// 执行SQL语句,返回结果集中的第一个数据表
+        /// </summary>
+        /// <param name="transaction">事务</param>
+        /// <param name="commandType">命令类型(存储过程,命令文本, 其它.)</param>
+        /// <param name="commandText">SQL语句或存储过程名称</param>
+        /// <param name="parms">查询参数</param>
+        /// <returns>返回结果集中的第一个数据表</returns>
+        public static DataTable ExecuteDataTable(SqlTransaction transaction, CommandType commandType, string commandText, params SqlParameter[] parms)
+        {
+            return ExecuteDataSet(transaction, commandType, commandText, parms).Tables[0];
+        }
+
+      
+        /// <summary>
+        /// 执行SQL语句,返回结果集
+        /// </summary>
+        /// <param name="connection">数据库连接</param>
+        /// <param name="commandType">命令类型(存储过程,命令文本, 其它.)</param>
+        /// <param name="commandText">SQL语句或存储过程名称</param>
+        /// <param name="parms">查询参数</param>
+        /// <returns>返回结果集</returns>
+        public static DataSet ExecuteDataSet(SqlConnection connection, CommandType commandType, string commandText, params SqlParameter[] parms)
+        {
+            return ExecuteDataSet(connection, null, commandType, commandText, parms);
+        }
+
+        /// <summary>
+        /// 执行SQL语句,返回结果集
+        /// </summary>
+        /// <param name="transaction">事务</param>
+        /// <param name="commandType">命令类型(存储过程,命令文本, 其它.)</param>
+        /// <param name="commandText">SQL语句或存储过程名称</param>
+        /// <param name="parms">查询参数</param>
+        /// <returns>返回结果集</returns>
+        public static DataSet ExecuteDataSet(SqlTransaction transaction, CommandType commandType, string commandText, params SqlParameter[] parms)
+        {
+            return ExecuteDataSet(transaction.Connection, transaction, commandType, commandText, parms);
+        }
+
+        /// <summary>
+        /// 执行SQL语句,返回结果集
+        /// </summary>
+        /// <param name="connection">数据库连接</param>
+        /// <param name="transaction">事务</param>
+        /// <param name="commandType">命令类型(存储过程,命令文本, 其它.)</param>
+        /// <param name="commandText">SQL语句或存储过程名称</param>
+        /// <param name="parms">查询参数</param>
+        /// <returns>返回结果集</returns>
+        private static DataSet ExecuteDataSet(SqlConnection connection, SqlTransaction transaction, CommandType commandType, string commandText, params SqlParameter[] parms)
+        {
+            SqlCommand command = new SqlCommand();
+            PrepareCommand(command, connection, transaction, commandType, commandText, parms);
+            SqlDataAdapter adapter = new SqlDataAdapter(command);
+            DataSet ds = new DataSet();
+            adapter.Fill(ds);
+            command.Parameters.Clear();
+            return ds;
+        }
+
+        
+
+        public static DataTable ExecuteTddyDataTable(SqlConnection connection, SqlTransaction transaction, CommandType commandType, string commandText, params SqlParameter[] parms)
+        {
+            
+            SqlCommand command = new SqlCommand();
+            PrepareCommand(command, connection, transaction, commandType, commandText, parms);
+            //SqlDataAdapter adapter = new SqlDataAdapter(command);
+            SqlDataReader dataReader = command.ExecuteReader();
+            DataTable datatable = new DataTable(); 
+            try
+            {    ///动态添加表的数据列
+                for (int i = 0; i < dataReader.FieldCount; i++)
+                {
+                    DataColumn myDataColumn = new DataColumn();
+                    myDataColumn.DataType = dataReader.GetFieldType(i);
+                    myDataColumn.ColumnName = dataReader.GetName(i);
+                    datatable.Columns.Add(myDataColumn);
+                }
+                ///添加表的数据
+                while (dataReader.Read())
+                {
+                    DataRow myDataRow = datatable.NewRow();
+                    for (int i = 0; i < dataReader.FieldCount; i++)
+                    {
+                        myDataRow[i] = dataReader[i];
+                    }
+                    datatable.Rows.Add(myDataRow);
+                    myDataRow = null;
+                }
+            }
+            catch (System.Exception ex) { }
+            finally
+            {
+                ///关闭数据读取器
+                dataReader.Close();
+            }
+            //adapter.Fill(datatable);
+            command.Parameters.Clear();
+            return datatable;
+        }
+        public static SqlDataReader ExecuteTddyDataReader(SqlConnection connection, SqlTransaction transaction, CommandType commandType, string commandText, params SqlParameter[] parms)
+        { 
+            SqlCommand command = new SqlCommand();
+            PrepareCommand(command, connection, transaction, commandType, commandText, parms);
+            //SqlDataAdapter adapter = new SqlDataAdapter(command);
+            SqlDataReader dataReader = command.ExecuteReader(); 
+            command.Parameters.Clear();
+            return dataReader;
+        }
+        public static void UpdateTime(string type, string DatabaseName,string UnitSerialNumber,string ConnectString,int context)
+        {
+            string sql = "select 数值 from " + DatabaseName + ".典型参数表  where 单位='" + UnitSerialNumber + "' and 参数名称='" + type + "'";
+            string updatesql = "update  " + DatabaseName + ".典型参数表 set 应用范围=getdate() where 单位='" + UnitSerialNumber + "' and 参数名称='" + type + "'";
+            string sqlInsert = "INSERT INTO  " + DatabaseName + ".典型参数表 (参数名称, 单位,应用范围) VALUES ('" + type + "', '" + UnitSerialNumber + "',getdate())";
+            SqlConnection connection = TddyLocalDBHelper.InitSqlConnection(ConnectString,DatabaseName,context);//启动数据库连接
+            System.Data.DataTable dt = TddyLocalDBHelper.ExecuteDataTable(connection, CommandType.Text, sql);
+            if (dt.Rows.Count == 0)
+            {
+                TddyLocalDBHelper.ExecuteTddyNonQuery(connection, null, sqlInsert);
+            }
+            else
+            {
+                TddyLocalDBHelper.ExecuteTddyNonQuery(connection, null, updatesql);
+            }
+        }
+
+
+       
+
+        public static string IS_CHANGE = "SELECT DISTINCT 线路名称 设备名称 FROM ( SELECT ID 线路名称 FROM {0}.高压线路表 A WHERE 单位序号 ='{1}' AND EXISTS ( SELECT 1 FROM {0}.设备名称对照表 WHERE 单位序号 ='{1}' AND [datetime] > CAST ('{2}' AS datetime) AND 设备名称 = A.ID ) UNION ALL SELECT ID 线路名称 FROM {0}.中压线路表 A WHERE 单位序号 ='{1}' AND EXISTS ( SELECT 1 FROM {0}.设备名称对照表 WHERE 单位序号 ='{1}' AND [datetime] > CAST ('{2}' AS datetime) AND 设备名称 = A.ID ) UNION ALL SELECT 主供线路名称 FROM {0}.开关设施表 A WHERE 单位序号 ='{1}' AND EXISTS ( SELECT 1 FROM {0}.设备名称对照表 WHERE 单位序号 ='{1}' AND [datetime] > CAST ('{2}' AS datetime) AND 设备名称 = A.ID ) UNION ALL SELECT 所属线路名称 FROM {0}.配电设施表 A WHERE 单位序号 ='{1}' AND EXISTS ( SELECT 1 FROM {0}.设备名称对照表 WHERE 单位序号 ='{1}' AND [datetime] > CAST ('{2}' AS datetime) AND 设备名称 = A.ID ) UNION ALL SELECT 并网线路 FROM {0}.电源表 A WHERE 单位序号 ='{1}' AND CAST ( 并网电压等级 AS NUMERIC (10, 2)) <= 10 AND EXISTS ( SELECT 1 FROM {0}.设备名称对照表 WHERE 单位序号 ='{1}' AND [datetime] > CAST ('{2}' AS datetime) AND 设备名称 = A.ID )) A";
+
+     
+
+        public static bool IsChanged(string ConnectString, string DatabaseName, string UnitSerialNumber,string CurrentCity, int context, string type = "")
+        {
+            string updatetime = "2000-01-01 00:00:00.000";
+            bool ischanged = false;
+            string sql1 = "select 应用范围  from " + DatabaseName + ".典型参数表  where 单位='" + UnitSerialNumber + "' and 参数名称='{0}' ";
+            SqlConnection connection = TddyLocalDBHelper.InitSqlConnection(ConnectString,DatabaseName,context);//启动数据库连接
+            System.Data.DataTable dt = TddyLocalDBHelper.ExecuteDataTable(connection, CommandType.Text, string.Format(sql1, type == "" ? "拓扑" : type));
+            if (dt.Rows.Count == 0) return true;
+            updatetime = dt.Rows[0][0].ToString();
+            DateTime dtime = DateTime.Parse(updatetime);
+            updatetime = string.Format("{0:yyyy-MM-dd HH:mm:ss.fff}", dtime);
+            dt = TddyLocalDBHelper.ExecuteDataTable(connection, CommandType.Text, string.Format(IS_CHANGE,CurrentCity, UnitSerialNumber, updatetime));
+            if (dt.Rows.Count > 0) ischanged = true;
+            return ischanged;
+        }
+        public static bool IsChanged(string ConnectString, string DatabaseName, string UnitSerialNumber,int context, string type, bool isupdate = true)
+        {
+            string updatetime = "2000-01-01 00:00:00.000";
+            bool ischanged = false;
+            string sql0 = "select 1  from " + DatabaseName + ".设备名称对照表  where 单位序号='" + UnitSerialNumber + "' and datetime>cast('{0}' as datetime)";
+            string sql1 = "select 应用范围  from " + DatabaseName + ".典型参数表  where 单位='" + UnitSerialNumber + "' and 参数名称='{0}' ";
+            SqlConnection connection = TddyLocalDBHelper.InitSqlConnection(ConnectString,DatabaseName,context);//启动数据库连接
+            System.Data.DataTable dt = TddyLocalDBHelper.ExecuteDataTable(connection, CommandType.Text, string.Format(sql1, type));
+            if (dt.Rows.Count == 0) return true;
+            //if ( type == "初始化索引" ) return true;
+            if (!isupdate) return false;
+            updatetime = dt.Rows[0][0].ToString();
+            DateTime dtime = DateTime.Parse(updatetime);
+            updatetime = string.Format("{0:yyyy-MM-dd HH:mm:ss.fff}", dtime);
+            dt = TddyLocalDBHelper.ExecuteDataTable(connection, CommandType.Text, string.Format(sql0, updatetime));
+            if (dt.Rows.Count > 0) ischanged = true;
+            return ischanged;
+        }
+
+        public static void ChangeDataTime(string ConnectString, string DatabaseName, string UnitSerialNumber, int context)
+        {
+            string sql0 = "update " + DatabaseName + ".设备名称对照表   set datetime=GETDATE()";
+            string sql1 = "delete from " + DatabaseName + ".典型参数表 where 参数名称 like  '%Proc%' or [参数名称] like  '%time%' and 单位='" + UnitSerialNumber + "'";
+            SqlConnection connection = TddyLocalDBHelper.InitSqlConnection(ConnectString, DatabaseName, context);//启动数据库连接
+            TddyLocalDBHelper.ExecuteTddyNonQuery(connection, null, sql0);
+            TddyLocalDBHelper.ExecuteTddyNonQuery(connection, null, sql1);
+        }
+
+
+        public static void ClearChanged(string type, string ConnectString, string DatabaseName, string UnitSerialNumber, int context)
+        {
+            string sql0 = "delete   from " + DatabaseName + ".典型参数表  where 单位='" + UnitSerialNumber + "' and 参数名称='" + type + "' ";
+            SqlConnection connection = TddyLocalDBHelper.InitSqlConnection(ConnectString, DatabaseName, context);//启动数据库连接
+            TddyLocalDBHelper.ExecuteTddyNonQuery(connection, null, sql0);
+        }
+
+        public static void ClearAllChanged(string type, string ConnectString, string DatabaseName, string UnitSerialNumber, int context)
+        {
+            string sql0 = "delete   from " + DatabaseName + ".典型参数表  where 单位='" + UnitSerialNumber + "' and 参数名称 in (" + type + ") ";
+            SqlConnection connection = TddyLocalDBHelper.InitSqlConnection(ConnectString, DatabaseName, context);//启动数据库连接
+            TddyLocalDBHelper.ExecuteTddyNonQuery(connection, null, sql0);
+        }
+
+        public static string GetUpdateTime(string type, string ConnectString, string DatabaseName, string UnitSerialNumber, int context)
+        {
+            string updatetime = "2000-01-01 00:00:00.000";
+            try
+            {
+                string sql1 = "select 应用范围  from " + DatabaseName + ".典型参数表  where 单位='" + UnitSerialNumber + "' and 参数名称='{0}' ";
+                SqlConnection connection = TddyLocalDBHelper.InitSqlConnection(ConnectString, DatabaseName, context);//启动数据库连接
+                System.Data.DataTable dt = TddyLocalDBHelper.ExecuteDataTable(connection, CommandType.Text, string.Format(sql1, type));
+                if (dt.Rows.Count > 0)
+                {
+                    updatetime = dt.Rows[0][0].ToString();
+                    DateTime dtime = DateTime.Parse(updatetime);
+                    updatetime = string.Format("{0:yyyy-MM-dd HH:mm:ss.fff}", dtime);
+                }
+            }
+            catch { }
+            return updatetime;
+        }
+
+       
+
+
+        
+
+        /// <summary>
+        /// 判断是否是数字
+        /// </summary>
+        /// <param name="str">字符串</param>
+        /// <returns>true、false</returns>
+        public static bool IsNumber(string str)
+        {
+            double result;
+            if (double.TryParse(str, out result))
+            {
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        }
+        /// <summary>
+        /// 设置比例设置
+        /// </summary>
+        /// <param name="blszjson"></param>
+        public static string QueryBlsz(string ConnectString, string DatabaseName, string UnitSerialNumber, int context)
+        {
+            string blsz = "";
+            SqlConnection connection = TddyLocalDBHelper.InitSqlConnection(ConnectString, DatabaseName, context);//启动数据库连接;
+            string sql1 = "select 应用范围 from " + DatabaseName + ".典型参数表 where 参数名称='比例设置' and 单位='" + UnitSerialNumber + "'";
+            System.Data.DataTable dt1 = null;
+            try
+            {
+                dt1 = TddyLocalDBHelper.ExecuteDataTable(connection, CommandType.Text, sql1, null);
+                if (dt1 != null && dt1.Rows.Count > 0)
+                {
+                    blsz = dt1.Rows[0][0].ToString();
+                }
+            }
+            catch { }
+            return blsz;
+        }
+    }
+}

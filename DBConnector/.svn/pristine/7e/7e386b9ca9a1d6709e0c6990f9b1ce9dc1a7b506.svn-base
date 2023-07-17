@@ -1,0 +1,455 @@
+﻿using DBConnector.Oracle;
+using DBConnector.PG;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using Oracle.ManagedDataAccess.Client;
+using RestSharp;
+using System;
+using System.Collections.Generic;
+using System.Data;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace DBConnector
+{
+    public class InterfaceClass
+    {
+        public void InitialParameter()
+        {
+
+            ConfigClass.Initial_PG_Config();
+        }
+        public Dictionary<int, System.Data.DataTable> GetData(string taskId,out string parameter)
+        {
+            Dictionary<int, System.Data.DataTable> topodata = new Dictionary<int, System.Data.DataTable>();
+            Npgsql.NpgsqlConnection cn = null;
+            Npgsql.NpgsqlConnection GhdwConn = null;
+            OracleConnection oracleConn = null;
+            if (taskId == "") taskId = "123123123111222333111"; //任务ID
+            parameter = "";
+            string dwxh = "";
+            try
+            {
+                DataTable dt = new DataTable();
+                #region 数据库启动连接 
+                InitialParameter();
+                cn = (new PGConn()).conn;
+                GhdwConn = (new PGGhdwConn()).conn;
+                oracleConn = (new OracleConn()).conn;
+                #endregion
+                #region 任务查询 fzgis_ghdw数据库 获取parameter dwxh
+                DataTable dt_PG_Task = PG.PGClass.QueryNpgDatabase(GhdwConn, string.Format(ConfigClass.PG_QuerySql_Task, taskId));
+                if (dt_PG_Task == null || dt_PG_Task.Rows.Count == 0) return topodata;
+                bool isOne = true;
+                if (dt_PG_Task.Rows[0]["is_base"].ToString() == "1")
+                {
+                    parameter = "task_id='" + dt_PG_Task.Rows[0]["task_id"] + "'";
+                }
+                else
+                {
+                    StringBuilder sb = new StringBuilder("('");
+                    int count = dt_PG_Task.Rows.Count;
+                    for (int i = 0; i < count; i++)
+                    {
+                        if (i == count - 1)
+                            sb.Append(dt_PG_Task.Rows[i]["task_id"] + "')");
+                        else
+                            sb.Append(dt_PG_Task.Rows[i]["task_id"] + "','");
+                    }
+                    parameter = "(CASE WHEN task_id = '" + taskId + "' THEN 1 = 1 ELSE(indate = udate OR udate > to_timestamp('" + dt_PG_Task.Rows[0]["topodate"] + "', 'yyyy-MM-dd hh24:mi:ss')) END) AND task_id IN " + sb.ToString() + " AND hash_part IN(38, 48)";
+                }
+
+                dwxh = dt_PG_Task.Rows[0]["dwxh"].ToString();
+                #endregion 
+                #region 查询省份ID 获取dept_code year
+                DataTable dt_PG_ProvinceID = PG.PGClass.QueryNpgDatabase(cn, string.Format(ConfigClass.PG_QuerySql_ProvinceID, dwxh));
+                if (dt_PG_ProvinceID == null || dt_PG_ProvinceID.Rows.Count == 0) return topodata;
+                string dept_code = dt_PG_ProvinceID.Rows[0]["dept_code"].ToString();
+                ConfigClass.year = int.Parse(dt_PG_ProvinceID.Rows[0]["year"].ToString());
+                #endregion 
+                #region 创建临时表 
+                //创建临时表 PG: topo_sb_line_oid
+                PG.PGClass.CreateTempTable(GhdwConn, ConfigClass.PG_CreateTempTable);
+                DataTable DDD = PGClass.QueryNpgDatabase(GhdwConn, "select * from topo_sb_line_oid");
+                //创建临时表 PG: topo_pdss
+                PG.PGClass.CreateTempTable(GhdwConn, ConfigClass.PG_CreateTempTablePdss);
+                //创建临时表Oracle: topo_sb_line_sbid
+                Oracle.OracleClass.CreateTempTable(oracleConn);
+                #endregion 
+                #region 查询变电站参数表 
+                DataTable dtpara_Sub = PG.PGClass.QueryNpgDatabase(GhdwConn, string.Format(ConfigClass.PG_QuerySql_Substation, parameter, dwxh));
+                //dtpara_Sub  xl_sbid devicetype
+                Oracle.OracleClass.ContrastTableAndWrite(dtpara_Sub, oracleConn, ConfigClass.dicContrastOracleTempTable, "topo_sb_line_sbid");
+                DataTable dt_Oracle_Sub = Oracle.OracleClass.QueryOracleDatabase(string.Format(ConfigClass.Oracle_Query_BDZDACX, dept_code), oracleConn);//查询变电站Oracle 
+                #endregion 
+                #region 获取接口数据
+                //2、通过接口返回来的json转换成表
+                string message = "";
+                DataTable dtTempt = GetTableByCondition(dtpara_Sub, "devicetype=1");
+                dt = GetDataTableByPara(dtTempt);
+                if (dt.Rows.Count == 0) return topodata;
+                message += "接口查询数量：" + dt.Rows.Count + Environment.NewLine;
+                DeleteInvalidData(ref dt, ref dtTempt); //删除无效数据
+                message += "接口去除无效数据：" + dt.Rows.Count + Environment.NewLine;
+                DataTable dt_1 = DataTableClass.JoinTable(dt, dtTempt.DefaultView.ToTable(false, new string[] { "typeid", "xl_cxkg", "sbdydj" }), new List<string>() { "cxkg", "cxkglx" }, new List<string>() { "xl_cxkg", "typeid" }).DefaultView.ToTable(false, new string[] { "oid", "equips", "typeid", "cxkg", "cxkglx", "sbdydj" });//拼接  
+                dt_1.Columns["sbdydj"].ColumnName = "dydj";
+                message += "拼接后数据：" + dt_1.Rows.Count + Environment.NewLine;
+                //将接口返回的数据插入临时表
+                PG.PGClass.WriteToServer(dt_1, "topo_sb_line_oid", GhdwConn);
+
+                //PG.PGClass.WriteToServer(dt_1, "topo_zyxl. topo_sb_line_oid", GhdwConn);
+                #endregion
+                #region 馈线  
+                DataTable dt_pg_mxh = PG.PGClass.QueryNpgDatabase(GhdwConn, string.Format(ConfigClass.PG_Query_CXMXH, parameter));//查询母线号
+                DataTable dt_Oracle_Feeder = Oracle.OracleClass.QueryOracleDatabase(string.Format(ConfigClass.Oracle_QueryFeederSql, dept_code), oracleConn);//查询oracle馈线 
+                #endregion 
+                #region 线段信息  
+                DataTable dt_PG_CXXDXX = PG.PGClass.QueryNpgDatabase(GhdwConn, String.Format(ConfigClass.PG_Query_XDDA, parameter, dwxh));
+                message += "线段数据数据：" + dt_PG_CXXDXX.Rows.Count + Environment.NewLine;
+                //清空oracle临时表将dt_PG_CXXDXX插入临时表中（devicetype sbid）
+                Oracle.OracleClass.ExecuteNoneQuery(ConfigClass.Oracle_ClearTempTable, oracleConn);
+                Oracle.OracleClass.ContrastTableAndWrite(dt_PG_CXXDXX, oracleConn, ConfigClass.dicContrastOracleTempTableXDXX, "topo_sb_line_sbid");
+                DataTable dt_Oracle_CXXDXX = Oracle.OracleClass.QueryOracleDatabase(string.Format(ConfigClass.Oracle_Query_XDDA, dept_code), oracleConn);
+                #endregion 
+                #region 配电设施
+                //DataTable dt_PG_Trans = PG.PGClass.QueryNpgDatabase(cn, ConfigClass.PG_Query_Trans);
+                DataTable dt_Oracle_Trans = Oracle.OracleClass.QueryOracleDatabase(string.Format(ConfigClass.Oracle_Query_Trans, dept_code), oracleConn);
+                PG.PGClass.WriteToServer(GetTableByCondition(dt_PG_CXXDXX, "devicetype=5"), "topo_pdss", GhdwConn);
+                //DataTable dtest1 = PG.PGClass.QueryNpgDatabase(GhdwConn, "select * from topo_pdss ");//查询oracle临时表记录
+                #endregion 
+                #region 开关设施
+                //查出设备类型为4、5 的数据放入临时表
+                DataTable dt_PG_Switch = PG.PGClass.QueryNpgDatabase(GhdwConn, string.Format(ConfigClass.PG_Query_Switch, parameter, dwxh));
+                Oracle.OracleClass.ContrastTableAndWrite(GetTableByCondition(dt_PG_Switch, "devicetype=4"), oracleConn, ConfigClass.dicContrastOracleTempTableXDXX, "topo_sb_line_sbid");
+                //Oracle.OracleClass.ContrastTableAndWrite(dt_PG_Switch.Select("devicetype=4").CopyToDataTable(), oracleConn, ConfigClass.dicContrastOracleTempTableXDXX, "topo_sb_line_sbid_1");
+                DataTable dt_Oracle_Switch = Oracle.OracleClass.QueryOracleDatabase(string.Format(ConfigClass.Oracle_Query_Switch, dept_code), oracleConn);
+
+                #endregion 
+                DataTable dtResult_Sub = DataTableClass.JoinTable(GetTableByCondition(dtpara_Sub, "devicetype=0"), dt_Oracle_Sub, "sbid", "DWZY_ID");//拼接 
+                DataTable dtResult_Feeder1 = DataTableClass.JoinTable(dtTempt, dt_pg_mxh, new List<string>() { "xl_cxkg", "xl_cxkglx" }, new List<string>() { "cxkg", "cxkglx" });//拼接  
+                DataTable dtResult_Feeder2 = DataTableClass.JoinTable(dtResult_Feeder1, dt_Oracle_Feeder, "sbid", "dwzy_id"); //拼接
+                DataTable dtResult_XD = DataTableClass.JoinTable(GetTableByCondition(dt_PG_CXXDXX, "devicetype=2"), dt_Oracle_CXXDXX, "sbid", "DWZY_ID");//拼接
+                DataTable dtResult_Trans = DataTableClass.JoinTable(GetTableByCondition(dt_PG_CXXDXX, "devicetype=5"), dt_Oracle_Trans, "sbid", "dwzy_id");
+                DataTable dataTable = GetTableByCondition(dt_PG_CXXDXX, "devicetype=3");
+                dataTable.Columns["oid"].ColumnName = "dm_id";
+                //将线段信息devicetype为3的和dt_PG_Switch合并
+                dt_PG_Switch.Merge(dataTable, false, MissingSchemaAction.Ignore);
+                DataTable dtResult_Switch_1 = DataTableClass.JoinTable(dt_PG_Switch, dt_Oracle_Switch, "sbid", "dwzy_id"); //拼接 
+                ////配电设施数据入库 
+                //PG.PGClass.ExecuteNoneQuery(string.Format(ConfigClass.PG_Delete_Sql, "topo_zyxl.topo_pdss", ConfigClass.dwxh, ConfigClass.year), GhdwConn);
+                //PG.PGClass.ExecuteNoneQuery(string.Format(ConfigClass.PG_Insert_Trans, parameter), GhdwConn);
+                //#region 数据拼接 数据入库
+                //Task.Run(() =>
+                //{
+
+                //    PG.PGConn pgcg = new PG.PGConn();
+                //    try
+                //    {
+                //        //变电站数据入库 
+                //        PG.PGClass.ExecuteNoneQuery(string.Format(ConfigClass.PG_Delete_Sql, "topo_zyxl.topo_bdz", ConfigClass.dwxh, ConfigClass.year), pgcg.conn);
+                //        PG.PGClass.ContrastTableAndWrite(dtResult_Sub, pgcg.conn, ConfigClass.dicContrastTopoBdz, "topo_zyxl.topo_bdz");
+                //        //中压线路数据入库 
+                //        PG.PGClass.ExecuteNoneQuery(string.Format(ConfigClass.PG_Delete_Sql, "topo_zyxl.topo_zyxl", ConfigClass.dwxh, ConfigClass.year), pgcg.conn);
+                //        PG.PGClass.ContrastTableAndWrite(dtResult_Feeder2, pgcg.conn, ConfigClass.dicContrastTopoZyxl, "topo_zyxl.topo_zyxl");
+                //        //开关设施数据入库 
+                //        PG.PGClass.ExecuteNoneQuery(string.Format(ConfigClass.PG_Delete_Sql, "topo_zyxl.topo_kgss", ConfigClass.dwxh, ConfigClass.year), pgcg.conn);
+                //        PG.PGClass.ContrastTableAndWrite(GetTableByCondition(dtResult_Switch_1, "rows=1 and (devicetype=3 or devicetype=4)"), pgcg.conn, ConfigClass.dicContrastTopoKgss, "topo_zyxl.topo_kgss");
+
+                //    }
+                //    catch (Exception ex)
+                //    {
+
+                //        throw new Exception(ex.StackTrace+ex.Message);
+                //    }
+                //    finally
+                //    {
+                //        pgcg.conn.Dispose();
+                //    }
+                //});
+                //#endregion   
+                message += "线段拼接数据：" + dtResult_XD.Rows.Count + Environment.NewLine;
+                message += "开关拼接数据：" + dtResult_Switch_1.Rows.Count + Environment.NewLine;
+                message += "配变拼接数据：" + dtResult_Trans.Rows.Count + Environment.NewLine;
+                topodata.Add(0, dtResult_Sub);//0:变电站 
+                topodata.Add(1, dtResult_XD);//1:
+                topodata.Add(2, dtResult_Switch_1);//2:开关设施 3、4 
+                topodata.Add(3, dtResult_Trans);//3:配电设施5
+                topodata.Add(4, new DataTable());//4:电源6 
+                topodata.Add(5, GetTableByCondition(dt_PG_CXXDXX, "devicetype=7"));//5:母线号dtResult_XD里面的devicetype为7的 
+                topodata.Add(6, GetTableByCondition(dtResult_Feeder2, "XLSX = '公用'  OR  XLSX is null"));//6:馈线 
+                //GetLoadData(topodata, dept_code, "2022-08-16 12:00:00", dept_code);
+
+            }
+            catch (Exception ex)
+            {
+                throw new Exception(ex.StackTrace + Environment.NewLine + ex.Message);
+            }
+            finally
+            {
+                if (cn != null) cn.Dispose();
+                if (GhdwConn != null) GhdwConn.Dispose();
+                if (oracleConn != null) oracleConn.Dispose();
+            }
+            return topodata;
+        }
+        private string GetEquipId(DataTable dt)
+        {
+            StringBuilder sb = new StringBuilder();
+            foreach (DataRow dr in dt.Rows)
+            {
+                if (dr["OBJ_ID"] == DBNull.Value) continue;
+                sb.Append(dr["OBJ_ID"] + ",");
+            }
+            sb.Remove(sb.Length - 1, 1);
+            return sb.ToString();
+        }
+        /// <summary>
+        /// 获取负荷参数
+        /// </summary>
+        /// <param name="type">0：变电站，1：主变，2：配变，3：线路，4：开关</param>
+        /// <param name="equipId"></param>
+        /// <param name="sgcode"></param>
+        /// <param name="periods"></param>
+        /// <param name="deptcode"></param>
+        /// <returns></returns>
+        private LoadData GetParameter(int type, string equipId, string sgcode, string periods, string deptcode)
+        {
+            LoadData loadData = new LoadData();
+            string srvCode = "";
+            string equipType = "";
+            switch (type)
+            {
+                case 0://变电站
+                    srvCode = "00000004";
+                    equipType = "0300";
+                    break;
+                case 1://主变
+                    srvCode = "00000002";
+                    equipType = "0301";
+                    break;
+                case 2://配变
+                    srvCode = "00000001";
+                    equipType = "0302";
+                    break;
+                case 3://线路
+                    //srvCode = "00000004";
+                    equipType = "0303";
+                    break;
+                case 4://开关
+                    srvCode = "00000003";
+                    //equipType = "0300";
+                    break;
+                default:
+                    return loadData;
+            }
+            loadData.srvCode = srvCode;
+            loadData.equipType = equipType;
+            loadData.equipId = equipId;
+            loadData.sgcode = sgcode;
+            loadData.funcCode = "01";
+            loadData.periods = periods;
+            loadData.deptcode = deptcode;
+            loadData.type = "01";
+            loadData.serialNo = "FF000000-0000-0050-0000-000000000600-02216";
+            return loadData;
+        }
+        public DataTable GetLoadData(Dictionary<int, System.Data.DataTable> topodata, string sgcode, string periods, string deptcode)
+        {
+            DataTable dt = new DataTable();
+            dt.Columns.Add("id", typeof(string));
+            dt.Columns.Add("fh", typeof(double));
+            string url = "http://20.32.224.217:7002/PowerInfo/teeinterface/rest/DppService/getData";
+            string data = "";
+            List<LoadData> list = new List<LoadData>();
+            list.Add(GetParameter(2, GetEquipId(topodata[3]), sgcode, periods, deptcode));
+            list.Add(GetParameter(3, GetEquipId(topodata[6]), sgcode, periods, deptcode));
+            LoadInfo info = new LoadInfo();
+            info.user = "8ad5979d66ec89dd016936e0524b5e07";
+            info.serviceCode = "ele_calc_run_service";//固定值
+            info.data = list;
+            data = JsonConvert.SerializeObject(info);
+            string redata = "{ \"data\":[{\"aaaaaaaaaa\":{ \"k_30_7\":16.4400,\"k_40_7\":17.4400,\"k_20_7\":18.4400,\"k_10_7\":19.4400},\"bbbbbbbbbb\":{ \"k_30_7\":26.4400,\"k_40_7\":36.4400,\"k_20_7\":46.4400,\"k_10_7\":56.4400}, \"cccccccccc\":{ \"k_30_7\":26.4400,\"k_40_7\":36.4400,\"k_20_7\":46.4400,\"k_10_7\":56.4400},\"dddddddddd\":{ \"k_30_7\":16.4400,\"k_40_7\":16.4400,\"k_20_7\":16.4400,\"k_10_7\":16.4400},\"eeeeeeeeee\":{ \"k_30_7\":66.4400,\"k_40_7\":76.4400,\"k_20_7\":86.4400,\"k_10_7\":96.4400}}],\"failcode\":\"001\",\"successful\":true,\"info\":\"服务器调用成功！\" }";
+            try
+            {
+                string condition = "&condition=(sbtype = 311000 and fsbzlx in (30000000) ) &topoState=3";
+                url += url + data + condition;
+                var client = new RestClient(url);
+                var request = new RestRequest(Method.POST);
+                request.Timeout = 10000;
+                request.AddParameter("application/json", data, ParameterType.RequestBody);
+                var response = client.Execute(request);
+                redata = response.Content;
+                //以上为负荷预测接口调用
+                Dictionary<string, object> ddd = Newtonsoft.Json.JsonConvert.DeserializeObject<Dictionary<string, object>>(redata);
+                if (ddd.ContainsKey("data")) return dt;
+                JArray array = JArray.Parse(ddd["data"].ToString());
+                double value = 0;
+                foreach (var a in array)
+                {
+                    if (a == null) continue;
+                    foreach (var aa in a.Children())
+                    {
+                        if (aa == null) continue;
+                        JsonConvert.DeserializeObject<Dictionary<string, double>>(aa.First.ToString()).TryGetValue("k_10_7", out value);
+                        dt.Rows.Add(new object[] { ((JProperty)aa).Name, value });
+                    }
+                }
+
+            }
+            catch (Exception ex)
+            {
+                throw new Exception(ex.StackTrace + Environment.NewLine + ex.Message);
+            }
+            return dt;
+        }
+        /// <summary>
+        /// 删除无效数据
+        /// </summary>
+        /// <param name="dt">接口表</param>
+        /// <param name="dtTempt"></param>
+        private void DeleteInvalidData(ref DataTable dt, ref DataTable dtTempt)
+        {
+            try
+            { 
+                var query = from t in dt.Select("equips='stopequips'").CopyToDataTable().AsEnumerable()
+                            group t by new { t1 = t.Field<long>("cxkg"), t2 = t.Field<long>("cxkglx") } into m
+                            select new
+                            {
+                                oid = m.First().Field<long>("oid"),
+                                equips = m.First().Field<string>("equips"),
+                                typeid = m.First().Field<long>("typeid"),
+                                cxkg = m.Key.t1,
+                                cxkglx = m.Key.t2,
+                                rowcount = m.Count()
+                            };
+                DataTable ddd = new DataTable();
+                ddd.Columns.Add("cxkg", typeof(long));
+                ddd.Columns.Add("cxkglx", typeof(long));
+                foreach (var item in query.ToList())
+                {
+                    if (item.rowcount > 1)
+                    {
+                        ddd.Rows.Add(new object[] { item.cxkg, item.cxkglx });
+                    }
+                }
+                string str = "xl_cxkg={0} and typeid={1}";
+                string str1 = "cxkg={0} and cxkglx={1}";
+                foreach (DataRow item in ddd.Rows)
+                {
+                    DataRow[] dr = dtTempt.Select(string.Format(str, item["cxkg"], item["cxkglx"]));
+                    if (dr.Length > 0)
+                    {
+                        for (int i = 0; i < dr.Length; i++)
+                        {
+                            dtTempt.Rows.Remove(dr[i]);
+                        }
+                    }
+                    DataRow[] dr1 = dt.Select(string.Format(str1, item["cxkg"], item["cxkglx"]));
+                    if (dr1.Length > 0)
+                    {
+                        for (int i = 0; i < dr1.Length; i++)
+                        {
+                            dt.Rows.Remove(dr1[i]);
+                        }
+                    }
+                }
+
+            }
+            catch (Exception ex)
+            {
+                throw new Exception(ex.StackTrace + Environment.NewLine + ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// 根据条件筛选并返回表
+        /// </summary>
+        /// <param name="dt">原始表</param>
+        /// <param name="condition">条件</param>
+        /// <returns></returns>
+        private static DataTable GetTableByCondition(DataTable dt, string condition)
+        {
+            DataRow[] dr = dt.Select(condition);
+            return dr.Length == 0 ? dt.Clone() : dr.CopyToDataTable();
+        }
+        private DataTable GetDataTableByPara(DataTable dtpara_Sub)
+        {
+            DataTable dt = new DataTable();
+            dt.Columns.Add("oid", typeof(long));
+            dt.Columns.Add("equips", typeof(string));
+            dt.Columns.Add("typeid", typeof(long));
+            dt.Columns.Add("cxkg", typeof(long));
+            dt.Columns.Add("cxkglx", typeof(long));
+            List<DeviceInfo> listInfo = new List<DeviceInfo>();
+            List<object> listOid = new List<object>();
+            DeviceInfo devInfo;
+            foreach (DataRow drpara in dtpara_Sub.Rows)
+            {
+                if (drpara["typeid"].ToString() == "0") continue;
+                if (listOid.Contains(drpara["xl_cxkg"])) continue;
+                listOid.Add(drpara["xl_cxkg"]);
+                devInfo = new DeviceInfo();
+                devInfo.typeid = (long)drpara["typeid"];
+                devInfo.oid = (long)drpara["xl_cxkg"];
+                listInfo.Add(devInfo);
+            }
+            listOid.Clear();
+            if (listInfo.Count == 0) return dt;
+            string condition = "&condition=(sbtype = 311000 and fsbzlx in (30000000) ) &topoState=3";
+            ParaInfo paraInfo = new ParaInfo();
+            paraInfo.equip = listInfo;
+            string parameter = JsonConvert.SerializeObject(paraInfo);
+            string url = ConfigClass.ServerDataIp + parameter + condition;
+            var client = new RestClient(url);
+            var request = new RestRequest();
+            //request.AddHeader("cache-control", "no-cache");
+            request.Timeout = 10000;
+            //request.AddHeader("Connection", "keep-alive");
+            //request.AddHeader("referer", url);
+            //request.AddHeader("accept-encoding", "gzip, deflate");
+            //request.AddHeader("Postman-Token", "46e023f0-e74c-4c19-85d9-49d4f81cbab3,4efc3779-2390-48a8-b93a-aa879ada9aa2");
+            //request.AddHeader("Cache-Control", "no-cache");
+            //request.AddHeader("Accept", "*/*");
+            //request.AddHeader("User-Agent", "PostmanRuntime/7.15.0");
+            RestResponse response = (RestResponse)client.Execute(request);
+            if (response.Content == null) return dt;
+            INFO info = JsonConvert.DeserializeObject<INFO>(response.Content);
+            if (info == null) return dt;
+            List<ResultValue> list = info.resultValue;
+            System.Data.DataRow dr = null;
+            if (list == null) return dt;
+            foreach (ResultValue result in list)
+            {
+                if (result == null) continue;
+                if (result.resultValue == null) continue;
+                foreach (ResultValueInfo resInfo in result.resultValue)
+                {
+                    if (resInfo == null) continue;
+                    if (resInfo.lastequips != null)
+                    {
+                        foreach (DeviceInfo item in resInfo.lastequips)
+                        {
+                            dt.Rows.Add(new object[] { item.oid, "lastequips", item.typeid, result.oid, result.typeid });
+                        }
+                    }
+                    if (resInfo.otherequips != null)
+                    {
+                        foreach (DeviceInfo item in resInfo.otherequips)
+                        {
+                            dt.Rows.Add(new object[] { item.oid, "otherequips", item.typeid, result.oid, result.typeid });
+                        }
+                    }
+                    if (resInfo.stopequips != null)
+                    {
+                        foreach (DeviceInfo item in resInfo.stopequips)
+                        {
+                            dt.Rows.Add(new object[] { item.oid, "stopequips", item.typeid, result.oid, result.typeid });
+                        }
+                    }
+                }
+            }
+            return dt;
+        }
+    }
+}

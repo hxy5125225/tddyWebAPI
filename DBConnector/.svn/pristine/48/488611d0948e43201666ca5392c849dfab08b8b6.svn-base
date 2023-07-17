@@ -1,0 +1,328 @@
+﻿using Npgsql;
+using NpgsqlTypes;
+using System;
+using System.Collections.Generic;
+using System.Data;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace DBConnector.PG
+{
+    public class PGClass
+    {
+        public static DataTable QueryNpgDatabase()
+        {
+            DataTable dt = new DataTable();
+            using (NpgsqlConnection cn = new NpgsqlConnection("Server=localhost;Port=54320;UserId=postgres;Password=123456;Database=postgres;Encoding=UTF8"))
+            {
+
+                cn.Open();
+                NpgsqlCommand cmd = new NpgsqlCommand("select * from tt", cn);
+                NpgsqlDataAdapter adapter = new NpgsqlDataAdapter(cmd);
+                DataSet daset = new DataSet();
+                adapter.Fill(daset);
+                dt = daset.Tables[0];
+                cmd.Parameters.Clear();
+                cmd.Dispose();
+            }
+            return dt;
+        }
+
+        public static void ExecuteNoneQuery(DataTable dt)
+        {
+            using (NpgsqlConnection cn = new NpgsqlConnection("Server=172.16.144.252;Port=19200;User Id=gis;Password=GIS20_sig;Database=fzgis;Encoding=UNICODE"))
+            {
+                cn.Open();
+                foreach (DataRow dr in dt.Rows)
+                {
+                    string sql = string.Format(ConfigClass.PG_InsertSql, dr["oid"].ToString(), dr["equips"].ToString(), dr["typeid"].ToString(), dr["chkg"].ToString(), 1);
+                    using (NpgsqlCommand cmd = new NpgsqlCommand(sql, cn))
+                    {
+                        cmd.CommandType = CommandType.Text;
+                        cmd.ExecuteNonQuery();
+                    }
+                }
+            }
+
+        }
+
+
+
+
+
+        public static void WriteToServer<T>(IEnumerable<T> data)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(ConfigClass.DestinationTableName)) return;
+                System.Reflection.PropertyInfo[] properties = typeof(T).GetProperties();
+                int colCount = properties.Length;
+
+                NpgsqlDbType[] types = new NpgsqlDbType[colCount];
+                int[] lengths = new int[colCount];
+                string[] fieldNames = new string[colCount];
+                NpgsqlConnection conn = new NpgsqlConnection(ConfigClass.PGConString);
+                conn.Open();
+                using (var cmd = new NpgsqlCommand(string.Format(ConfigClass.PG_Query_Ceshi, ConfigClass.DestinationTableName), conn))
+                {
+                    using (var rdr = cmd.ExecuteReader())
+                    {
+                        if (rdr.FieldCount != colCount)
+                        {
+                            throw new ArgumentOutOfRangeException("dataTable", "Column count in Destination Table does not match column count in source table.");
+                        }
+                        var columns = rdr.GetColumnSchema();
+                        for (int i = 0; i < colCount; i++)
+                        {
+                            types[i] = (NpgsqlDbType)columns[i].NpgsqlDbType;
+                            lengths[i] = columns[i].ColumnSize == null ? 0 : (int)columns[i].ColumnSize;
+                            fieldNames[i] = columns[i].ColumnName;
+                        }
+                    }
+
+                }
+                var sB = new StringBuilder(fieldNames[0]);
+                for (int p = 1; p < colCount; p++)
+                {
+                    sB.Append(", " + fieldNames[p]);
+                }
+                using (var writer = conn.BeginBinaryImport("COPY " + ConfigClass.DestinationTableName + " (" + sB.ToString() + ") FROM STDIN (FORMAT BINARY)"))
+                {
+                    foreach (var t in data)
+                    {
+                        writer.StartRow();
+
+                        for (int i = 0; i < colCount; i++)
+                        {
+                            if (properties[i].GetValue(t) == null)
+                            {
+                                writer.WriteNull();
+                            }
+                            else
+                            {
+                                switch (types[i])
+                                {
+                                    case NpgsqlDbType.Bigint:
+                                        writer.Write((long)properties[i].GetValue(t), types[i]);
+                                        break;
+                                    case NpgsqlDbType.Bit:
+                                        if (lengths[i] > 1)
+                                        {
+                                            writer.Write((byte[])properties[i].GetValue(t), types[i]);
+                                        }
+                                        else
+                                        {
+                                            writer.Write((byte)properties[i].GetValue(t), types[i]);
+                                        }
+                                        break;
+                                    case NpgsqlDbType.Boolean:
+                                        writer.Write((bool)properties[i].GetValue(t), types[i]);
+                                        break;
+                                    case NpgsqlDbType.Bytea:
+                                        writer.Write((byte[])properties[i].GetValue(t), types[i]);
+                                        break;
+                                    case NpgsqlDbType.Char:
+                                        if (properties[i].GetType() == typeof(string))
+                                        {
+                                            writer.Write((string)properties[i].GetValue(t), types[i]);
+                                        }
+                                        else if (properties[i].GetType() == typeof(Guid))
+                                        {
+                                            var value = properties[i].GetValue(t).ToString();
+                                            writer.Write(value, types[i]);
+                                        }
+
+
+                                        else if (lengths[i] > 1)
+                                        {
+                                            writer.Write((char[])properties[i].GetValue(t), types[i]);
+                                        }
+                                        else
+                                        {
+
+                                            var s = ((string)properties[i].GetValue(t).ToString()).ToCharArray();
+                                            writer.Write(s[0], types[i]);
+                                        }
+                                        break;
+                                    case NpgsqlDbType.Time:
+                                    case NpgsqlDbType.Timestamp:
+                                    case NpgsqlDbType.TimestampTz:
+                                    case NpgsqlDbType.Date:
+                                        writer.Write((DateTime)properties[i].GetValue(t), types[i]);
+                                        break;
+                                    case NpgsqlDbType.Double:
+                                        writer.Write((double)properties[i].GetValue(t), types[i]);
+                                        break;
+                                    case NpgsqlDbType.Integer:
+                                        try
+                                        {
+                                            if (properties[i].GetType() == typeof(int))
+                                            {
+                                                writer.Write((int)properties[i].GetValue(t), types[i]);
+                                                break;
+                                            }
+                                            else if (properties[i].GetType() == typeof(string))
+                                            {
+                                                var swap = Convert.ToInt32(properties[i].GetValue(t));
+                                                writer.Write((int)swap, types[i]);
+                                                break;
+                                            }
+                                        }
+                                        catch (Exception ex)
+                                        {
+                                            string sh = ex.Message;
+                                        }
+
+                                        writer.Write((object)properties[i].GetValue(t), types[i]);
+                                        break;
+                                    case NpgsqlDbType.Interval:
+                                        writer.Write((TimeSpan)properties[i].GetValue(t), types[i]);
+                                        break;
+                                    case NpgsqlDbType.Numeric:
+                                    case NpgsqlDbType.Money:
+                                        writer.Write((double)properties[i].GetValue(t), types[i]);
+                                        break;
+                                    case NpgsqlDbType.Real:
+                                        writer.Write((Single)properties[i].GetValue(t), types[i]);
+                                        break;
+                                    case NpgsqlDbType.Smallint:
+
+                                        try
+                                        {
+                                            if (properties[i].GetType() == typeof(byte))
+                                            {
+                                                var swap = Convert.ToInt16(properties[i].GetValue(t));
+                                                writer.Write((short)swap, types[i]);
+                                                break;
+                                            }
+                                            writer.Write((short)properties[i].GetValue(t), types[i]);
+                                        }
+                                        catch (Exception ex)
+                                        {
+                                            string ms = ex.Message;
+                                        }
+
+                                        break;
+                                    case NpgsqlDbType.Varchar:
+                                    case NpgsqlDbType.Text:
+                                        writer.Write((string)properties[i].GetValue(t), types[i]);
+                                        break;
+                                    case NpgsqlDbType.Uuid:
+                                        writer.Write((Guid)properties[i].GetValue(t), types[i]);
+                                        break;
+                                    case NpgsqlDbType.Xml:
+                                        writer.Write((string)properties[i].GetValue(t), types[i]);
+                                        break;
+                                }
+                            }
+                        }
+                    }
+                    writer.Complete();
+                }
+            }
+            catch (Exception ex)
+            {
+                throw new Exception("Error executing NpgSqlBulkCopy.WriteToServer().  See inner exception for details", ex);
+            }
+        }
+        public static IEnumerable<DBINFO> DataTableConvertToIEnumerable(DataTable dt)
+        {
+            var infos = new List<DBINFO>();
+
+            System.Reflection.PropertyInfo[] properties = typeof(DBINFO).GetProperties();
+            for (int i = 0; i < properties.Length; i++)
+            {
+                if (properties[i].GetType()==typeof(string))
+                {
+
+                }
+                else if(properties[i].GetType() == typeof(double))
+                {
+
+                }
+                else if (properties[i].GetType() == typeof(long))
+                {
+
+                }
+                else if (properties[i].GetType() == typeof(int))
+                {
+
+                }
+                else if (properties[i].GetType() == typeof(string))
+                {
+
+                }
+                else if (properties[i].GetType() == typeof(string))
+                {
+
+                }
+                else if (properties[i].GetType() == typeof(string))
+                {
+
+                }
+                else if (properties[i].GetType() == typeof(string))
+                {
+
+                }
+                else if (properties[i].GetType() == typeof(string))
+                {
+
+                }
+                else if (properties[i].GetType() == typeof(string))
+                {
+
+                }
+            }
+
+
+
+            foreach (DataRow row in dt.Rows)
+            {
+                var info = new DBINFO
+                {
+                    oid = (long)Convert.ToDouble(row["oid"]),
+                    equips = row["equips"].ToString(),
+                    typeid = (long)Convert.ToDouble(row["typeid"]),
+                    chkg = (long)Convert.ToDouble(row["chkg"]),
+                    年份 = Convert.ToInt32(row["年份"]),
+                    start_conn = row["start_conn"].ToString(),
+                    end_conn = row["end_conn"].ToString(),
+                    sbzlx = (long)Convert.ToDouble(row["sbzlx"]),
+                    type = row["type"].ToString(),
+                    // shape = row["shape"].ToString(),
+                    devicetype = Convert.ToInt32(row["devicetype"]),
+                    devicename = row["devicename"].ToString(),
+                    blackname = row["blackname"].ToString(),
+                    kgzt = Convert.ToInt32(row["kgzt"]),
+                    sbid = row["sbid"].ToString(),
+                    xlcd = Convert.ToDouble(row["xlcd"]),
+                    //NAME = row["NAME"].ToString()
+                };
+                infos.Add(info);
+            }
+            return infos.AsEnumerable();
+        }
+
+    }
+    public class DBINFO
+    {
+        public long oid { get; set; }
+        public string equips { get; set; }
+        public long typeid { get; set; }
+        public long chkg { get; set; }
+        public int 年份 { get; set; }
+        public string start_conn { get; set; }
+        public string end_conn { get; set; }
+        public long sbzlx { get; set; }
+        public string type { get; set; }
+        //public string shape { get; set; }
+        public int devicetype { get; set; }
+        public string devicename { get; set; }
+        public string blackname { get; set; }
+        public int kgzt { get; set; }
+        public string sbid { get; set; }
+        public double xlcd { get; set; }
+        //public string NAME { get; set; }
+    }
+}

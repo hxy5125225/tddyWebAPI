@@ -1,0 +1,296 @@
+﻿using Npgsql;
+using Oracle.ManagedDataAccess.Client;
+using System;
+using System.Collections.Generic;
+using System.Data;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace DBConnector.Oracle
+{
+    public class OracleClass
+    {
+
+        public static DataTable QueryOracleDatabase(string sql)
+        {
+            DataTable dt = new DataTable();
+            try
+            {
+                using (OracleConnection cn = new OracleConnection(ConfigClass.OracleConString))
+                {
+                    cn.Open();
+                    using (OracleCommand cmd = new OracleCommand(sql, cn))
+                    {
+                        using (OracleDataReader reader = cmd.ExecuteReader())
+                        {
+                            if (reader == null) return dt;
+                            dt.Locale = System.Globalization.CultureInfo.InvariantCulture;
+                            int fieldCount = reader.FieldCount;
+                            // 在表中创建字段
+                            for (int counter = 0; counter < fieldCount; counter++)
+                            {
+                                dt.Columns.Add(reader.GetName(counter), reader.GetFieldType(counter));
+                            }
+                            dt.BeginLoadData();
+                            object[] values = new object[fieldCount];
+                            while (reader.Read())
+                            {
+                                // 添加行
+                                reader.GetValues(values);
+                                dt.LoadDataRow(values, true);
+                            }
+                            // 完成转换并返回
+                            dt.EndLoadData();
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                throw new Exception(ex.Message);
+            }
+            return dt;
+        }
+        //public static DataTable QueryOracleDatabase(string sql, OracleConnection cn)
+        //{
+        //    DataTable dt = new DataTable();
+        //    try
+        //    {
+        //        if (cn.State != ConnectionState.Open)
+        //            cn.Open();
+        //        using (OracleCommand cmd = new OracleCommand(sql, cn))
+        //        {
+        //            using (OracleDataReader reader = cmd.ExecuteReader())
+        //            {
+        //                if (reader == null) return dt;
+        //                dt.Locale = System.Globalization.CultureInfo.InvariantCulture;
+        //                int fieldCount = reader.FieldCount;
+        //                // 在表中创建字段
+        //                for (int counter = 0; counter < fieldCount; counter++)
+        //                {
+        //                    dt.Columns.Add(reader.GetName(counter), reader.GetFieldType(counter));
+        //                }
+        //                dt.BeginLoadData();
+        //                object[] values = new object[fieldCount];
+        //                while (reader.Read())
+        //                {
+        //                    // 添加行
+        //                    reader.GetValues(values);
+        //                    dt.LoadDataRow(values, true);
+        //                }
+        //                // 完成转换并返回
+        //                dt.EndLoadData();
+        //            }
+        //        }
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        throw new Exception(ex.StackTrace + Environment.NewLine + ex.Message);
+        //    }
+        //    return dt;
+        //}
+        public static DataTable QueryOracleDatabase(string sql, List<object> objects, OracleConnection cn)
+        {
+            DataTable dt = new DataTable();
+            try
+            {
+                if (cn.State != ConnectionState.Open)
+                    cn.Open();
+                using (OracleCommand cmd = new OracleCommand(sql, cn))
+                {
+                    if (objects.Count > 0)
+                    {
+                        cmd.Parameters.AddRange(InitOracleParameter(objects));
+                    }
+                    using (OracleDataAdapter da = new OracleDataAdapter(cmd))
+                    {
+                        DataSet ds = new DataSet();
+                        ds.EnforceConstraints = false;
+                        da.Fill(ds);
+                        dt = ds.Tables[0];
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                throw new Exception(ex.StackTrace + Environment.NewLine + ex.Message);
+            }
+            return dt;
+        }
+        public static OracleParameter[] InitOracleParameter(List<object> objects)
+        {
+            List<OracleParameter> parameters = new List<OracleParameter>();
+            for (int i = 0; i < objects.Count; i++)
+            {
+                parameters.Add(new OracleParameter("param" + i, objects[i]));
+            }
+            return parameters.ToArray();
+        }
+        public static DataTable CreateTableBySchemaTable(DataTable pSchemaTable)
+        {
+            DataTable dtReturn = new DataTable();
+            DataColumn dc = null;
+            DataRow dr = null;
+            for (int i = 0; i < pSchemaTable.Rows.Count; i++)
+            {
+                dr = pSchemaTable.Rows[i];
+                dc = new DataColumn(dr["ColumnName"].ToString(), dr["DataType"] as Type);
+                dtReturn.Columns.Add(dc);
+            }
+            dr = null;
+            dc = null;
+            return dtReturn;
+        }
+
+        public static void CreateTempTable(OracleConnection cn)
+        {
+            DataTable dt = QueryOracleDatabase(ConfigClass.Oracle_ExistTempTable, new List<object>(), cn);
+            if (int.Parse(dt.Rows[0][0].ToString()) != 0) return;
+            using (OracleCommand cmd = new OracleCommand(ConfigClass.Oracle_CreateTempTable, cn))
+            {
+                cmd.CommandType = CommandType.Text;
+                cmd.ExecuteNonQuery();
+            }
+        }
+        public static void CreateTempTable_1(OracleConnection cn)
+        {
+            DataTable dt = QueryOracleDatabase(ConfigClass.Oracle_ExistTempTable_1, new List<object>(), cn);
+            if (int.Parse(dt.Rows[0][0].ToString()) != 0) return;
+            using (OracleCommand cmd = new OracleCommand(ConfigClass.Oracle_CreateTempTable_1, cn))
+            {
+                cmd.CommandType = CommandType.Text;
+                cmd.ExecuteNonQuery();
+            }
+        }
+        public static void WriteToServer(DataTable Table, string TableName, OracleConnection conn)
+        {
+            try
+            {
+                using (OracleBulkCopy bulkCopy = new OracleBulkCopy(conn))
+                {
+                    bulkCopy.BulkCopyTimeout = Table.Rows.Count;
+                    bulkCopy.DestinationTableName = TableName;//要插入的表的表名
+                    bulkCopy.BatchSize = Table.Rows.Count;
+                    for (int i = 0; i < Table.Columns.Count; i++)
+                    {
+                        bulkCopy.ColumnMappings.Add(new OracleBulkCopyColumnMapping(Table.Columns[i].ColumnName, Table.Columns[i].ColumnName));
+                    }
+                    bulkCopy.WriteToServer(Table);
+                }
+            }
+            catch (Exception ex)
+            {
+                throw new Exception(ex.StackTrace + Environment.NewLine + ex.Message);
+            }
+            finally
+            {
+            }
+        }
+        public static void ContrastTableAndWrite(DataTable dt, OracleConnection con, Dictionary<Dictionary<string, System.Type>, string> dicName, string tableName)
+        {
+            try
+            {
+                //1、创建对应数据库字段的表结构
+                DataTable dtNew = new DataTable();
+                foreach (var item in dicName)
+                {
+                    dtNew.Columns.Add(item.Key.First().Key, item.Key.First().Value);
+                }
+                //2、转换数据
+                foreach (DataRow dr in dt.Rows)
+                {
+                    DataRow row = dtNew.NewRow();
+                    foreach (var item in dicName)
+                    {
+                        row[item.Key.First().Key] = dr[item.Value];
+                    }
+                    dtNew.Rows.Add(row);
+                }
+
+                WriteToServer(dtNew, tableName, con);
+            }
+            catch (Exception ex)
+            {
+                throw new Exception(ex.StackTrace + Environment.NewLine + ex.Message);
+            }
+        }
+        public static void ExecuteNoneQuery(string sql, OracleConnection cn)
+        {
+            if (string.IsNullOrEmpty(sql)) return;
+            try
+            {
+                if (cn.State != ConnectionState.Open)
+                    cn.Open();
+                using (OracleCommand cmd = new OracleCommand(sql, cn))
+                {
+                    cmd.CommandType = CommandType.Text;
+                    cmd.ExecuteNonQuery();
+                }
+            }
+            catch (Exception ex)
+            {
+
+                throw new Exception(ex.Message);
+            }
+        }
+
+        public static void SplitTableSave_WJFX(DataTable zyxl, string task_id, string dwxh, string loadTime, string sg_code, string qy_id, int callload, string startTime, ref bool isSuccess)
+        {
+            try
+            {
+                using (OracleConnection cn = new OracleConnection(ConfigClass.OracleConString))
+                {
+                    string sql = "delete from IEQ_PDE_LINE_ITEM_DATA where PERIODS = '" + loadTime + "' and TASK_ID = '" + task_id + "'";
+                    ExecuteNoneQuery(sql, cn);
+                    DataTable dt = zyxl.Copy();
+                    // dt.Columns["dwxh"].ColumnName = "DEPT_CODE";
+                    dt.Columns["loadtime"].ColumnName = "PERIODS";
+                    dt.Columns["org_id"].ColumnName = "SSDKX";
+                    dt.Columns["org_dwzy_id"].ColumnName = "DWZY_ID";
+
+                    DataTable dtCol = QueryOracleDatabase("select * from IEQ_PDE_LINE_ITEM_DATA where ROWNUM =1", new List<object>(), cn);
+                    List<string> list = new List<string>();
+                    foreach (DataColumn item in dtCol.Columns)
+                    {
+                        list.Add(item.ColumnName.ToLower());
+                    }
+                    for (int i = 0; i < dt.Columns.Count; i++)
+                    {
+                        if (list.Contains(dt.Columns[i].ColumnName.ToLower())) continue;
+                        dt.Columns.Remove(dt.Columns[i].ColumnName);
+                        i--;
+                    }
+                    WriteToServer(dt, "IEQ_PDE_LINE_ITEM_DATA", cn);
+                    PG.PGClass.SaveLogInfo(new List<object[]>() { new object[] { task_id, "ORACLE存库成功！共" + dt.Rows.Count + "条" } });
+                }
+            }
+            catch (Exception ex)
+            {
+                isSuccess = false;
+                PG.PGClass.SaveLogInfo(new List<object[]>() { new object[] { task_id, "ORACLE存库失败，异常信息：" + ex.Message + Environment.NewLine + ex.StackTrace } });
+                //throw new Exception(ex.StackTrace + ex.Message);
+            }
+        }
+
+        public static void UpdateTaskTime(string task_id)
+        {
+            OracleConnection cn = null;
+            try
+            {
+                OracleConn cnP = new OracleConn();
+                cn = cnP.conn;
+                ExecuteNoneQuery(string.Format(ConfigClass.Oracle_UpdateTaskTime, DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"), "2", task_id), cn);
+            }
+            catch (Exception ex) { throw ex; }
+            finally
+            {
+                if (cn != null)
+                {
+                    cn.Close();
+                    cn.Dispose();
+                }
+            }
+        }
+    }
+}

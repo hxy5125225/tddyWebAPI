@@ -1,0 +1,49 @@
+﻿using System;
+using System.IO;
+using System.IO.Compression;
+
+namespace DBConnector
+{
+    [System.Security.SecuritySafeCritical]
+    public static class GZipUtil
+    {
+        public static string Zip(string value)
+        {
+            byte[] byteArray = System.Text.Encoding.UTF8.GetBytes(value.ToString());
+            byte[] zipArray;
+            string result = string.Empty;
+            using (MemoryStream ms = new MemoryStream())
+            {
+                GZipStream compressedzipStream = new GZipStream(ms, CompressionMode.Compress, true);
+                compressedzipStream.Write(byteArray, 0, byteArray.Length);
+                compressedzipStream.Close();
+                zipArray=ms.ToArray();
+                result = Convert.ToBase64String(zipArray);
+            }
+            return result;
+        }
+        public static string UnZip(string value)
+        {
+            string result = string.Empty;
+            byte[] zippedData = Convert.FromBase64String(value);
+            using (MemoryStream ms = new System.IO.MemoryStream(zippedData))
+            {
+                using (GZipStream decompressedStream = new GZipStream(ms, CompressionMode.Decompress))
+                {
+                    StreamReader reader = new StreamReader(decompressedStream);
+                    result = reader.ReadToEnd();
+                    reader.Close();
+                }
+            }
+            return result;
+        }
+
+        [STAThread]
+        static void Main()
+        {
+            string ddd=File.ReadAllText("c:\\3.txt");
+             ddd=GZipUtil.Zip(ddd);
+            string dddd2= GZipUtil.UnZip(ddd);
+        }
+    }
+}

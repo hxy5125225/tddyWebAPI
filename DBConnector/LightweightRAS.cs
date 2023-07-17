@@ -1,0 +1,60 @@
+﻿using Org.BouncyCastle.Crypto;
+using Org.BouncyCastle.Security;
+using System;
+using System.IO;
+using System.Security.Cryptography;
+using System.Text;
+
+namespace DBConnector
+{
+    public class LightweightRAS
+    {
+        public static string publickey = "<RSAKeyValue><Modulus>me4GP2TXF/fY2BZpe8mMR15ZBjau79i8vynqINE8EGcn/aVSEUAOGgG6Z7LiG/hGktblUbBSoSX/IXBz2M847u+xlnNck9D6hgptfw7NCKojlwKOPaoCseb9An7u/1JHEYCpG984cffuPAXIj24p+jJM7RNDvbVrnQM7A1yvo/M=</Modulus><Exponent>AQAB</Exponent></RSAKeyValue>";
+        /// <summary>
+        /// 用公钥给数据进行RSA解密 
+        /// </summary>
+        /// <param name="xmlPublicKey"> 公钥(XML格式字符串) </param>
+        /// <param name="strDecryptString"> 要解密数据 </param>
+        /// <returns> 解密后的数据 </returns>
+        public static string PublicKeyDecrypt(string strDecryptString, string xmlPublicKey = "")
+        {
+            //加载公钥
+            RSACryptoServiceProvider publicRsa = new RSACryptoServiceProvider();
+            publicRsa.FromXmlString(xmlPublicKey == "" ? publickey : xmlPublicKey);
+            RSAParameters rp = publicRsa.ExportParameters(false);
+
+            //转换密钥
+            AsymmetricKeyParameter pbk = DotNetUtilities.GetRsaPublicKey(rp);
+
+            IBufferedCipher c = CipherUtilities.GetCipher("RSA/ECB/PKCS1Padding");
+            //第一个参数为true表示加密，为false表示解密；第二个参数表示密钥
+            c.Init(false, pbk);
+            byte[] outBytes = null;
+            byte[] dataToDecrypt = Convert.FromBase64String(strDecryptString);
+            #region 分段解密
+            int keySize = publicRsa.KeySize / 8;
+            byte[] buffer = new byte[keySize];
+
+            using (MemoryStream input = new MemoryStream(dataToDecrypt))
+            using (MemoryStream output = new MemoryStream())
+            {
+                while (true)
+                {
+                    int readLine = input.Read(buffer, 0, keySize);
+                    if (readLine <= 0)
+                    {
+                        break;
+                    }
+                    byte[] temp = new byte[readLine];
+                    Array.Copy(buffer, 0, temp, 0, readLine);
+                    byte[] decrypt = c.DoFinal(temp);
+                    output.Write(decrypt, 0, decrypt.Length);
+                }
+                outBytes = output.ToArray();
+            }
+            #endregion
+            string strDec = Encoding.UTF8.GetString(outBytes);
+            return strDec;
+        }
+    }
+}

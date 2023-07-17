@@ -1,0 +1,18 @@
+﻿using Npgsql;
+using System;
+using System.Collections.Generic;
+using System.Text;
+
+namespace DBConnector.PG
+{
+    public class PGConn
+    {
+        public Npgsql.NpgsqlConnection conn = null;
+        public PGConn()
+        { 
+            conn = new Npgsql.NpgsqlConnection(ConfigClass.PGConString);
+            conn.Open();
+            conn.TypeMapper.UseNetTopologySuite(handleOrdinates: GeoAPI.Geometries.Ordinates.XYZ);
+        } 
+    }
+}

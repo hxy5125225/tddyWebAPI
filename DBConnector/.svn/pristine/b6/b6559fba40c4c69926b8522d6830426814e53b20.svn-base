@@ -1,0 +1,51 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+
+namespace DBConnector
+{
+    public class INFO
+    {
+        public string code { get; set; }
+        public List<ResultValue> resultValue { get; set; }
+        public string  success { get; set; }
+        public string type { get; set; }
+    } 
+    public class ResultValue
+    {
+        public long oid { get; set; }
+        public List<ResultValueInfo> resultValue { get; set; } 
+    }
+    public class ResultValueInfo
+    {
+        public List< DeviceInfo> lastequips { get; set; }
+        public List<DeviceInfo> otherequips { get; set; }
+        public List<DeviceInfo> stopequips { get; set; }
+    }
+    public class TableInfo
+    {
+        public long oid { get; set; }
+        public string equips { get; set; }
+        public string typeid { get; set; }
+        public long chkg { get; set; }
+    }
+    public class DeviceInfo
+    {
+        public long typeid { get; set; }
+        public long oid { get; set; }
+    }
+    public class ParaInfo
+    {
+        public List<DeviceInfo> equip { get; set; }
+    }
+    public class UserInfo
+    {
+        /// <summary>
+        /// 第一张表
+        /// </summary>
+        public System.Data.DataTable dtPara { get; set; }
+        public System.Data.DataTable dtFeeder { get; set; }
+        public System.Data.DataTable dtSwitch { get; set; }
+    }
+}

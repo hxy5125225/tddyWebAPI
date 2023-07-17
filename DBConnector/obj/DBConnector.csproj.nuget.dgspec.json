@@ -1,0 +1,195 @@
+{
+  "format": 1,
+  "restore": {
+    "D:\\webConn\\DBConnector\\DBConnector.csproj": {}
+  },
+  "projects": {
+    "D:\\webConn\\bccrypto\\crypto\\BouncyCastle.csproj": {
+      "restore": {
+        "projectUniqueName": "D:\\webConn\\bccrypto\\crypto\\BouncyCastle.csproj",
+        "projectName": "BouncyCastle",
+        "projectPath": "D:\\webConn\\bccrypto\\crypto\\BouncyCastle.csproj",
+        "frameworks": {
+          "net472": {
+            "projectReferences": {}
+          }
+        }
+      },
+      "frameworks": {
+        "net472": {}
+      }
+    },
+    "D:\\webConn\\DBConnector\\DBConnector.csproj": {
+      "version": "2023.2.1",
+      "restore": {
+        "projectUniqueName": "D:\\webConn\\DBConnector\\DBConnector.csproj",
+        "projectName": "DBConnector",
+        "projectPath": "D:\\webConn\\DBConnector\\DBConnector.csproj",
+        "packagesPath": "C:\\Users\\Administrator\\.nuget\\packages\\",
+        "outputPath": "D:\\webConn\\DBConnector\\obj\\",
+        "projectStyle": "PackageReference",
+        "crossTargeting": true,
+        "configFilePaths": [
+          "C:\\Users\\Administrator\\AppData\\Roaming\\NuGet\\NuGet.Config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
+        ],
+        "originalTargetFrameworks": [
+          "net472",
+          "netcoreapp3.1"
+        ],
+        "sources": {
+          "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "netcoreapp3.1": {
+            "targetAlias": "netcoreapp3.1",
+            "projectReferences": {
+              "D:\\webConn\\bccrypto\\crypto\\BouncyCastle.csproj": {
+                "projectPath": "D:\\webConn\\bccrypto\\crypto\\BouncyCastle.csproj"
+              }
+            }
+          },
+          "net472": {
+            "targetAlias": "net472",
+            "projectReferences": {
+              "D:\\webConn\\bccrypto\\crypto\\BouncyCastle.csproj": {
+                "projectPath": "D:\\webConn\\bccrypto\\crypto\\BouncyCastle.csproj"
+              }
+            }
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        }
+      },
+      "frameworks": {
+        "netcoreapp3.1": {
+          "targetAlias": "netcoreapp3.1",
+          "dependencies": {
+            "GeoAPI.Core": {
+              "target": "Package",
+              "version": "[1.7.5, )"
+            },
+            "Microsoft.SqlServer.SqlManagementObjects": {
+              "target": "Package",
+              "version": "[170.11.0, )"
+            },
+            "Microsoft.SqlServer.Types": {
+              "target": "Package",
+              "version": "[14.0.314.76, )"
+            },
+            "NetTopologySuite": {
+              "target": "Package",
+              "version": "[1.15.0, )"
+            },
+            "NetTopologySuite.IO.PostGis": {
+              "target": "Package",
+              "version": "[1.15.0, )"
+            },
+            "Newtonsoft.Json": {
+              "target": "Package",
+              "version": "[13.0.2, )"
+            },
+            "Npgsql": {
+              "target": "Package",
+              "version": "[4.0.0, )"
+            },
+            "Npgsql.NetTopologySuite": {
+              "target": "Package",
+              "version": "[1.0.1, )"
+            },
+            "Oracle.ManagedDataAccess.Core": {
+              "target": "Package",
+              "version": "[2.19.180, )"
+            },
+            "RestSharp": {
+              "target": "Package",
+              "version": "[106.15.0, )"
+            },
+            "System.Data.DataSetExtensions": {
+              "target": "Package",
+              "version": "[4.5.0, )"
+            },
+            "System.Data.SqlClient": {
+              "target": "Package",
+              "version": "[4.8.5, )"
+            }
+          },
+          "imports": [
+            "net461",
+            "net462",
+            "net47",
+            "net471",
+            "net472",
+            "net48"
+          ],
+          "assetTargetFallback": true,
+          "warn": true,
+          "frameworkReferences": {
+            "Microsoft.NETCore.App": {
+              "privateAssets": "all"
+            }
+          },
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\3.1.426\\RuntimeIdentifierGraph.json"
+        },
+        "net472": {
+          "targetAlias": "net472",
+          "dependencies": {
+            "GeoAPI.Core": {
+              "target": "Package",
+              "version": "[1.7.5, )"
+            },
+            "Microsoft.SqlServer.SqlManagementObjects": {
+              "target": "Package",
+              "version": "[170.11.0, )"
+            },
+            "Microsoft.SqlServer.Types": {
+              "target": "Package",
+              "version": "[14.0.314.76, )"
+            },
+            "NetTopologySuite": {
+              "target": "Package",
+              "version": "[1.15.0, )"
+            },
+            "NetTopologySuite.IO.PostGis": {
+              "target": "Package",
+              "version": "[1.15.0, )"
+            },
+            "Newtonsoft.Json": {
+              "target": "Package",
+              "version": "[13.0.2, )"
+            },
+            "Npgsql": {
+              "target": "Package",
+              "version": "[4.0.0, )"
+            },
+            "Npgsql.NetTopologySuite": {
+              "target": "Package",
+              "version": "[1.0.1, )"
+            },
+            "Oracle.ManagedDataAccess": {
+              "target": "Package",
+              "version": "[19.18.0, )"
+            },
+            "RestSharp": {
+              "target": "Package",
+              "version": "[106.15.0, )"
+            },
+            "System.Data.DataSetExtensions": {
+              "target": "Package",
+              "version": "[4.5.0, )"
+            },
+            "System.Data.SqlClient": {
+              "target": "Package",
+              "version": "[4.8.5, )"
+            }
+          },
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\3.1.426\\RuntimeIdentifierGraph.json"
+        }
+      }
+    }
+  }
+}

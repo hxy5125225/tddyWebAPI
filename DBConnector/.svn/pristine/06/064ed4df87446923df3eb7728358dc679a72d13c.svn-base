@@ -1,0 +1,409 @@
+﻿using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Data;
+using System.Globalization;
+using System.Linq;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace DBConnector
+{
+    public class DataTableClass
+    {
+        /// <summary>
+        /// 合并表格
+        /// </summary>
+        /// <param name="dt1"></param>
+        /// <param name="dt2"></param>
+        /// <returns></returns>
+        public static System.Data.DataTable JoinTable(DataTable dt1, System.Data.DataTable dt2, string field1, string field2)
+        {
+            System.Data.DataTable dt = new DataTable();
+            GetColumns(dt1.Columns, ref dt);
+            GetColumns(dt2.Columns, ref dt);
+            if (dt1.Rows.Count == 0) return dt;
+            try
+            {
+                var query = from tab1 in dt1.AsEnumerable()
+                            join rowRight in dt2.AsEnumerable() on tab1[field1] equals rowRight[field2] into gj
+                            from tab2 in gj.DefaultIfEmpty()
+                            select tab1.ItemArray.Concat((tab2 == null) ? (dt2.NewRow().ItemArray) : tab2.ItemArray).ToArray();
+                foreach (object[] values in query)
+                {
+                    dt.Rows.Add(values);
+                }
+                dt.Columns.Remove(field2);
+            }
+            catch (Exception ex)
+            {
+                throw new Exception(ex.StackTrace);
+            }
+            return dt;
+        }
+
+        public static System.Data.DataTable JoinTable(DataTable dt1, System.Data.DataTable dt2, List<string> field1, List<string> field2)
+        {
+            System.Data.DataTable dt = new DataTable();
+            GetColumns(dt1.Columns, ref dt);
+            GetColumns(dt2.Columns, ref dt);
+            try
+            {
+                var query = from tab1 in dt1.AsEnumerable()
+                            join rowRight in dt2.AsEnumerable() on new { A = tab1.Field<long>(field1[0]), B = tab1.Field<long>(field1[1]) } equals new { A = rowRight.Field<long>(field2[0]), B = rowRight.Field<long>(field2[1]) }
+                 into gj
+                            from tab2 in gj.DefaultIfEmpty()
+                            select tab1.ItemArray.Concat((tab2 == null) ? (dt2.NewRow().ItemArray) : tab2.ItemArray).ToArray();
+                //var query = from tab1 in dt1.AsEnumerable()
+                //            join rowRight in dt2.AsEnumerable() on getObj1(tab1, field1) equals getObj1(rowRight, field2) into gj
+                //            from tab2 in gj.DefaultIfEmpty()
+                //            select tab1.ItemArray.Concat((tab2 == null) ? (dt2.NewRow().ItemArray) : tab2.ItemArray).ToArray();
+                foreach (object[] values in query)
+                {
+                    dt.Rows.Add(values);
+                }
+                //for (int i = 0; i < field2.Count; i++)
+                //{
+                //    dt.Columns.Remove(field2[i]);
+                //} 
+            }
+            catch (Exception ex)
+            {
+                throw new Exception(ex.StackTrace);
+            }
+            return dt;
+        }
+        public static object[] getObj(DataRow dr, List<string> list)
+        {
+            object[] obj = new object[list.Count];
+            for (int i = 0; i < list.Count; i++)
+            {
+                obj[i] = dr[list[i]];
+            }
+            return obj;
+        }
+        public static dynamic getObj1(DataRow dr, Dictionary<string, Type> dic)
+        {
+            List<string> list = new List<string>() { "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z" };
+            Dictionary<object, object> dics = new Dictionary<object, object>();
+            int count = 0;
+            foreach (var item in dic)
+            {
+                dics.Add(list[count], dr[item.Key]);
+                count++;
+            }
+            string json = Newtonsoft.Json.JsonConvert.SerializeObject(dics);
+            dynamic dy = Newtonsoft.Json.JsonConvert.DeserializeObject(json);
+            return dy;
+        }
+
+        public static void GetColumns(DataColumnCollection columns, ref DataTable dtAll)
+        {
+            foreach (System.Data.DataColumn column in columns)
+            {
+                string columnName = column.ColumnName;
+                if (dtAll.Columns.Contains(columnName))
+                {
+                    columnName = columnName + "_1";
+                }
+                dtAll.Columns.Add(columnName, column.DataType);
+            }
+        }
+        /// <summary>
+        /// 创建负荷DataTable
+        /// </summary>
+        /// <returns></returns>
+        public static DataTable CreateTransLoadTable()
+        {
+            DataTable dt = new DataTable();
+            dt.Columns.Add("oid", typeof(long));
+            dt.Columns.Add("sbzlx", typeof(long));
+            dt.Columns.Add("load", typeof(double));
+            dt.Columns.Add("task_id", typeof(string));
+            dt.Columns.Add("xl_oid", typeof(long));
+            return dt;
+        }
+        internal static DataTable CreateTopoInterfaceTable()
+        {
+            DataTable dt = new DataTable();
+            dt.Columns.Add("oid", typeof(long));
+            dt.Columns.Add("equips", typeof(string));
+            dt.Columns.Add("typeid", typeof(long));
+            dt.Columns.Add("cxkg", typeof(long));
+            dt.Columns.Add("cxkglx", typeof(long));
+            return dt;
+        }
+
+
+        public static System.Data.DataTable Join(System.Data.DataTable table1, System.Data.DataTable table2, DataColumn[] leftcolumn, DataColumn[] righecolumn)
+        {
+            System.Data.DataTable wjfxtable = new DataTable();
+            try
+            {
+                int i;
+                DataColumn[] frist, second;
+                List<string> list = new List<string>();
+                using (DataSet ds = new DataSet())
+                {
+                    //把databalecopy 到dataset中
+                    table1.TableName = Guid.NewGuid().ToString();
+                    table2.TableName = Guid.NewGuid().ToString();
+                    ds.Tables.AddRange(new DataTable[] { table1.Copy(), table2.Copy() });
+                    frist = new DataColumn[leftcolumn.Length];
+                    for (i = 0; i < frist.Length; i++)
+                    {
+                        frist[i] = ds.Tables[0].Columns[leftcolumn[i].ColumnName];
+                    }
+                    second = new DataColumn[righecolumn.Length];
+                    for (i = 0; i < second.Length; i++)
+                    {
+                        second[i] = ds.Tables[1].Columns[righecolumn[i].ColumnName];
+                    }
+                    //创建关联表
+                    DataRelation rt = new DataRelation(string.Empty, frist, second, false);
+                    ds.Relations.Add(rt);
+                    //为关联表创建列
+                    for (i = 0; i < table1.Columns.Count; i++)
+                    {
+                        wjfxtable.Columns.Add(table1.Columns[i].ColumnName, table1.Columns[i].DataType);
+                    }
+                    for (i = 0; i < table2.Columns.Count; i++)
+                    {
+                        if (!wjfxtable.Columns.Contains(table2.Columns[i].ColumnName))
+                        {
+                            wjfxtable.Columns.Add(table2.Columns[i].ColumnName, table2.Columns[i].DataType);
+                        }
+                        else
+                        {
+                            list.Add(table2.Columns[i].ColumnName + "_1");
+                            wjfxtable.Columns.Add(table2.Columns[i].ColumnName + "_1", table2.Columns[i].DataType);
+                        }
+                    }
+                    wjfxtable.BeginLoadData();
+
+                    int table2column = ds.Tables[1].Columns.Count;
+                    foreach (DataRow frisrow in ds.Tables[0].Rows)
+                    {
+                        //得到行的数据
+                        DataRow[] crows = frisrow.GetChildRows(rt);
+                        if (crows != null && crows.Length > 0)
+                        {
+                            object[] parentarray = frisrow.ItemArray;
+                            foreach (DataRow secondrow in crows)
+                            {
+                                object[] seconarray = secondrow.ItemArray;
+                                object[] jontarray = new object[parentarray.Length + seconarray.Length];
+                                Array.Copy(parentarray, 0, jontarray, 0, parentarray.Length);
+                                Array.Copy(seconarray, 0, jontarray, parentarray.Length, seconarray.Length);
+                                wjfxtable.LoadDataRow(jontarray, true);
+                            }
+                        }
+                        else//如果有外连接在下面处理
+                        {
+                            object[] table1array = frisrow.ItemArray;
+                            object[] table2array = new object[table2column];
+                            object[] jontarray = new object[table1array.Length + table2column];
+                            Array.Copy(table1array, 0, jontarray, 0, table1array.Length);
+                            Array.Copy(table2array, 0, jontarray, table1array.Length, table2column);
+                            wjfxtable.LoadDataRow(jontarray, true);
+                            DataColumn[] dc = new DataColumn[2];
+                            dc[0] = new DataColumn("");
+                        }
+                    }
+                    if (list.Count > 0)
+                    {
+                        for (int k = 0; k < list.Count; k++)
+                        {
+                            wjfxtable.Columns.Remove(list[k]);
+                        }
+                    }
+                    wjfxtable.EndLoadData();
+                }
+            }
+            catch (Exception ex)
+            {
+                throw new Exception(ex.StackTrace + Environment.NewLine + ex.Message);
+            }
+            return wjfxtable;
+        }
+
+        public static DataTable CreateTopoTlTable()
+        {
+            DataTable dt = new DataTable();
+            dt.Columns.Add("oid", typeof(long));
+            dt.Columns.Add("topo", typeof(string));
+            return dt;
+        }
+
+        public static DataTable CreateTransLoadCheckTable()
+        {
+            DataTable dt = new DataTable();
+            dt.Columns.Add("oid", typeof(string));
+            dt.Columns.Add("ssdkx", typeof(long));
+            dt.Columns.Add("periods", typeof(string));
+            dt.Columns.Add("max_load_time", typeof(string));
+            dt.Columns.Add("pd_load", typeof(double));
+            dt.Columns.Add("task_id", typeof(string));
+            return dt;
+        }
+        public static DataTable CreateFeederLoadCheckTable()
+        {
+            DataTable dt = new DataTable();
+            dt.Columns.Add("oid", typeof(string));
+            dt.Columns.Add("ssdkx", typeof(long));
+            dt.Columns.Add("llxl", typeof(long));
+            dt.Columns.Add("llxl_rl", typeof(double));
+            dt.Columns.Add("llxl_fh", typeof(double));
+            return dt;
+        }
+        public static DataTable OperateLeftJoin(DataTable dtLeft, DataTable dtRight, List<string> listLeft, List<string> listRight)
+        {
+            DataColumn[] leftCol = new DataColumn[listLeft.Count];
+            DataColumn[] rightCol = new DataColumn[listRight.Count];
+            for (int i = 0; i < listLeft.Count; i++)
+            {
+                leftCol[i] = dtLeft.Columns[listLeft[i]];
+            }
+            for (int i = 0; i < listRight.Count; i++)
+            {
+                rightCol[i] = dtRight.Columns[listRight[i]];
+            }
+
+
+
+            DataTable dt = dtRight.Copy();
+            for (int i = 0; i < listRight.Count; i++)
+            {
+                dt.Columns[listRight[i]].ColumnName = listLeft[i];
+            } 
+          return DataTableClass.Join(dtLeft, dtRight, leftCol, rightCol);//拼接  
+        }
+
+        internal static DataTable CreateErrorLogTable()
+        {
+            DataTable dt = new DataTable();
+            //dt.Columns.Add("oid", typeof(string));
+            dt.Columns.Add("task_id", typeof(string));
+            dt.Columns.Add("task_start", typeof(int));
+            dt.Columns.Add("start_time", typeof(string));
+            dt.Columns.Add("task_fail", typeof(int));
+            dt.Columns.Add("fail_time", typeof(string));
+            dt.Columns.Add("task_finish", typeof(int));
+            dt.Columns.Add("finish_time", typeof(string));
+            dt.Columns.Add("sg_code", typeof(string));
+            dt.Columns.Add("qy_id", typeof(string));
+            dt.Columns.Add("is_call_load", typeof(int));
+            return dt;
+        }
+        /// <summary>
+        /// 异常线路表
+        /// </summary>
+        /// <returns></returns>
+        public static DataTable CreateErrFeederTable()
+        {
+            DataTable dt = new DataTable();
+            dt.Columns.Add("oid", typeof(long));
+            dt.Columns.Add("task_id", typeof(string));
+            dt.Columns.Add("cxkglx", typeof(long));
+            dt.Columns.Add("cxkg", typeof(long));
+            dt.Columns.Add("sbzlx", typeof(long));
+            dt.Columns.Add("check_info", typeof(int));
+            dt.Columns.Add("load_check_info", typeof(int));
+            return dt;
+        }
+        public static DataTable CreateErrFeederTempTable()
+        {
+            DataTable dt = new DataTable();
+            dt.Columns.Add("oid", typeof(long));
+            dt.Columns.Add("xlsx", typeof(int));
+            return dt;
+        }
+        public static DataTable CreateFeederLossTable()
+        {
+            DataTable dt = new DataTable();
+            dt.Columns.Add("oid", typeof(long));
+            dt.Columns.Add("line_seg_data_loss", typeof(string));
+            return dt;
+        }
+        public static DataTable CreateTransLossTable()
+        {
+            DataTable dt = new DataTable();
+            dt.Columns.Add("oid", typeof(long));
+            dt.Columns.Add("pd_data_loss", typeof(string));
+            return dt;
+        }
+        public static DataTable CreateTopoLossTable()
+        {
+            DataTable dt = new DataTable();
+            dt.Columns.Add("oid", typeof(long));
+            dt.Columns.Add("topo_check_info", typeof(string));
+            return dt;
+        }
+        public static DataTable CreateLogTable()
+        {
+            DataTable dt = new DataTable();
+            dt.Columns.Add("task_id", typeof(string));
+            dt.Columns.Add("log_content", typeof(string));
+            return dt;
+        }
+        public static DataTable CreateTopoLogTable()
+        {
+            DataTable dt = new DataTable();
+            dt.Columns.Add("task_id", typeof(string));
+            dt.Columns.Add("log_content", typeof(string));
+            dt.Columns.Add("ssdkx", typeof(long));
+            return dt;
+        }
+        /// <summary>
+        /// 去重（按照某一个字段）
+        /// </summary>
+        /// <param name="dt">原始表</param>
+        /// <param name="fieldName">字段名称</param>
+        /// <returns></returns>
+        public static DataTable Distinct(DataTable dt, string fieldName)
+        {
+            DataTable dtResult = dt.Clone();
+            List<object> listOid = new List<object>();
+            foreach (DataRow item in dt.Rows)
+            {
+                if (listOid.Contains(item[fieldName])) continue;
+                listOid.Add(item[fieldName]);
+                dtResult.Rows.Add(item.ItemArray);
+            }
+            return dtResult;
+        }
+        public static DataTable Distinct(DataTable dt, List<string> list)
+        {
+            DataTable dtResult = dt.Clone();
+            try
+            {
+                List<string> listOid = new List<string>();
+                foreach (DataRow item in dt.Rows)
+                {
+                    string str = "";
+                    for (int i = 0; i < list.Count; i++)
+                    {
+                        str = str + item[list[i]];
+                    }
+                    if (listOid.Contains(str))
+                    {
+                        continue;
+                    }
+                    listOid.Add(str);
+                    dtResult.Rows.Add(item.ItemArray);
+                }
+            }
+            catch (Exception ex)
+            {
+                return dt;
+            }
+            return dtResult;
+        }
+        public static void Dispose(DataTable dt)
+        {
+            dt.Clear();
+            dt.Dispose();
+        }
+    }
+}

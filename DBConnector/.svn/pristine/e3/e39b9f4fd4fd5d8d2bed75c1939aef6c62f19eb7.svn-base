@@ -1,0 +1,410 @@
+﻿using Npgsql;
+using NpgsqlTypes;
+using System;
+using System.Collections.Generic;
+using System.Data;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace DBConnector.PG
+{
+    public class PGClass
+    {
+        public static DataTable QueryNpgDatabase(string sql)
+        {
+            DataTable dt = new DataTable();
+            try
+            {
+                using (NpgsqlConnection cn = new NpgsqlConnection(ConfigClass.PGConString))
+                {
+                    cn.Open();
+                    using (NpgsqlCommand cmd = new NpgsqlCommand(sql, cn))
+                    {
+                        NpgsqlDataReader reader = cmd.ExecuteReader();
+                        bool b = true;
+                        DataColumn column = new DataColumn();
+                        while (reader.Read())
+                        {
+                            DataRow row = dt.NewRow();
+                            for (int i = 0; i < reader.FieldCount; i++)
+                            {
+                                if (b)
+                                {
+                                    column = new DataColumn();
+                                    column.DataType = reader.GetFieldType(i);
+                                    column.ColumnName = reader.GetName(i);
+                                    dt.Columns.Add(column);
+                                }
+                                row[i] = reader[i];
+                            }
+                            dt.Rows.Add(row);
+                            row = null;
+                            b = false;
+                        }
+                        column = null;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+
+                throw new Exception(ex.StackTrace);
+            }
+            return dt;
+        }
+        public static DataTable QueryNpgDatabase(NpgsqlConnection cn, string sql)
+        {
+            DataTable dt = new DataTable();
+            int count = 0;
+            try
+            {
+                using (NpgsqlCommand cmd = new NpgsqlCommand(sql, cn))
+                {
+                    using (NpgsqlDataReader reader = cmd.ExecuteReader())
+                    {
+                        bool b = true;
+                        DataColumn column = new DataColumn();
+                        while (reader.Read())
+                        {
+                            count++;
+                            DataRow row = dt.NewRow();
+                            for (int i = 0; i < reader.FieldCount; i++)
+                            {
+                                if (b)
+                                {
+                                    column = new DataColumn();
+                                    column.DataType = reader.GetFieldType(i);
+                                    column.ColumnName = reader.GetName(i);
+                                    dt.Columns.Add(column);
+                                }
+                                row[i] = reader[i];
+                            }
+                            dt.Rows.Add(row);
+                            row = null;
+                            b = false;
+                        }
+                        column = null;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+
+                throw new Exception(ex.StackTrace);
+            }
+            return dt;
+        }
+        public static void CreateTempTable(DataTable dt, ref UserInfo userInfo, ref string message1)
+        {
+            var _starTime = DateTime.Now;
+            var timeSpan = DateTime.Now - _starTime;
+            message1 += string.Format("\n查询共耗时{0}分{1}秒{2}毫秒", timeSpan.Minutes, timeSpan.Seconds, timeSpan.Milliseconds);
+            _starTime = DateTime.Now;
+            using (NpgsqlConnection cn = new NpgsqlConnection(ConfigClass.PGConString))
+            {
+                cn.Open();
+                using (NpgsqlCommand cmd = new NpgsqlCommand(ConfigClass.PG_CreateTempTable, cn))
+                {
+                    cmd.CommandType = CommandType.Text;
+                    cmd.ExecuteNonQuery();
+                }
+                timeSpan = DateTime.Now - _starTime;
+                message1 += string.Format("\n创建临时表共耗时{0}分{1}秒{2}毫秒", timeSpan.Minutes, timeSpan.Seconds, timeSpan.Milliseconds);
+                _starTime = DateTime.Now;
+                WriteToServer<ServerDBInfo>(dt, 1, cn);
+                timeSpan = DateTime.Now - _starTime;
+                message1 += string.Format("\n批量插入表共耗时{0}分{1}秒{2}毫秒", timeSpan.Minutes, timeSpan.Seconds, timeSpan.Milliseconds);
+                _starTime = DateTime.Now;
+                userInfo.dtFeeder=QueryNpgDatabase(cn, ConfigClass.PG_Qurey_XDXX); 
+                timeSpan = DateTime.Now - _starTime;
+                message1 += string.Format("\n查询线段信息共耗时{0}分{1}秒{2}毫秒", timeSpan.Minutes, timeSpan.Seconds, timeSpan.Milliseconds);
+                _starTime = DateTime.Now;
+                userInfo.dtSwitch = QueryNpgDatabase(cn, ConfigClass.PG_Qurey_KGXX); 
+                timeSpan = DateTime.Now - _starTime;
+                message1 += string.Format("\n查詢开关信息共耗时{0}分{1}秒{2}毫秒", timeSpan.Minutes, timeSpan.Seconds, timeSpan.Milliseconds);
+                _starTime = DateTime.Now;
+                //DataTable df = userInfo.dtFeeder;
+                //System.Data.DataTable dtAll = df.Copy();
+                //dtAll.Columns.Add("A", typeof(string));
+                //dtAll.Columns.Add("B", typeof(string));
+                //object obj;
+                //List<string> list;
+                //foreach (DataRow dr in df.Rows)
+                //{
+                //    obj = dr["conn"];
+                //    if (obj == DBNull.Value) continue;
+                //    list = obj.ToString().Split(',').ToList();
+                //    dtAll.Rows.Add(dr[0], dr[1], dr[2], dr[3], dr[4], dr[5], dr[6], dr[7], dr[8], dr[9], dr[10], dr[11], dr[12], dr[13], dr[14], dr[15], dr[16], list[1], list[2]);
+                //}  
+            }
+        }
+
+        /// <summary>
+        /// 批量写入
+        /// tabType:
+        ///         1:表1
+        ///         2：表2
+        ///         3：表3
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="data"></param>
+        /// <param name="tabType"></param>
+        public static void WriteToServer<T>(DataTable data, int tabType, NpgsqlConnection conn)
+        {
+            try
+            {
+                string DestinationTableName = "topo_zyxl.topo_sb_line_oid";
+                string sql = "";
+                if (tabType == 1)
+                {
+                    DestinationTableName = "topo_sb_line_oid";
+                    sql = "SELECT oid,equips,typeid,cxkg  FROM {0} LIMIT 1";
+                }
+                else if (tabType == 2)
+                {
+                    DestinationTableName = "";
+                }
+                else if (tabType == 3)
+                {
+                    DestinationTableName = "";
+                    sql = "SELECT oid,equips,typeid,cxkg,年份,start_conn ,end_conn ,sbzlx,type, devicetype, devicename ,blackname,kgzt ,sbid ,xlcd   FROM {0} LIMIT 1";
+                }
+                if (string.IsNullOrEmpty(DestinationTableName)) return;
+                System.Reflection.PropertyInfo[] properties = typeof(T).GetProperties();
+                int colCount = properties.Length;
+
+                NpgsqlDbType[] types = new NpgsqlDbType[colCount];
+                int[] lengths = new int[colCount];
+                string[] fieldNames = new string[colCount];
+                using (var cmd = new NpgsqlCommand(string.Format(sql, DestinationTableName), conn))
+                {
+                    using (var rdr = cmd.ExecuteReader())
+                    {
+                        if (rdr.FieldCount != colCount)
+                        {
+                            throw new ArgumentOutOfRangeException("dataTable", "Column count in Destination Table does not match column count in source table.");
+                        }
+                        var columns = rdr.GetColumnSchema();
+                        for (int i = 0; i < colCount; i++)
+                        {
+                            types[i] = (NpgsqlDbType)columns[i].NpgsqlDbType;
+                            lengths[i] = columns[i].ColumnSize == null ? 0 : (int)columns[i].ColumnSize;
+                            fieldNames[i] = columns[i].ColumnName;
+                        }
+                    }
+
+                }
+                var sB = new StringBuilder(fieldNames[0]);
+                for (int p = 1; p < colCount; p++)
+                {
+                    sB.Append(", " + fieldNames[p]);
+                }
+                using (var writer = conn.BeginBinaryImport("COPY " + DestinationTableName + " (" + sB.ToString() + ") FROM STDIN (FORMAT BINARY)"))
+                {
+                    object value;
+                    foreach (DataRow t in data.Rows)
+                    {
+                        writer.StartRow();
+
+                        for (int i = 0; i < colCount; i++)
+                        {
+                            value = t[i];
+                            if (value == null)
+                            {
+                                writer.WriteNull();
+                            }
+                            else
+                            {
+                                switch (types[i])
+                                {
+                                    case NpgsqlDbType.Bigint:
+                                        writer.Write((long)value, types[i]);
+                                        break;
+                                    case NpgsqlDbType.Bit:
+                                        if (lengths[i] > 1)
+                                        {
+                                            writer.Write((byte[])value, types[i]);
+                                        }
+                                        else
+                                        {
+                                            writer.Write((byte)value, types[i]);
+                                        }
+                                        break;
+                                    case NpgsqlDbType.Boolean:
+                                        writer.Write((bool)value, types[i]);
+                                        break;
+                                    case NpgsqlDbType.Bytea:
+                                        writer.Write((byte[])value, types[i]);
+                                        break;
+                                    case NpgsqlDbType.Char:
+                                        if (properties[i].GetType() == typeof(string))
+                                        {
+                                            writer.Write((string)value, types[i]);
+                                        }
+                                        else if (properties[i].GetType() == typeof(Guid))
+                                        {
+                                            writer.Write(value.ToString(), types[i]);
+                                        }
+
+                                        else if (lengths[i] > 1)
+                                        {
+                                            writer.Write((char[])value, types[i]);
+                                        }
+                                        else
+                                        {
+
+                                            var s = ((string)value.ToString()).ToCharArray();
+                                            writer.Write(s[0], types[i]);
+                                        }
+                                        break;
+                                    case NpgsqlDbType.Time:
+                                    case NpgsqlDbType.Timestamp:
+                                    case NpgsqlDbType.TimestampTz:
+                                    case NpgsqlDbType.Date:
+                                        writer.Write((DateTime)value, types[i]);
+                                        break;
+                                    case NpgsqlDbType.Double:
+                                        writer.Write((double)value, types[i]);
+                                        break;
+                                    case NpgsqlDbType.Integer:
+                                        try
+                                        {
+                                            if (properties[i].GetType() == typeof(int))
+                                            {
+                                                writer.Write((int)value, types[i]);
+                                                break;
+                                            }
+                                            else if (properties[i].GetType() == typeof(string))
+                                            {
+                                                var swap = Convert.ToInt32(value);
+                                                writer.Write((int)swap, types[i]);
+                                                break;
+                                            }
+                                        }
+                                        catch (Exception ex)
+                                        {
+                                            string sh = ex.Message;
+                                        }
+
+                                        writer.Write((object)value, types[i]);
+                                        break;
+                                    case NpgsqlDbType.Interval:
+                                        writer.Write((TimeSpan)value, types[i]);
+                                        break;
+                                    case NpgsqlDbType.Numeric:
+                                    case NpgsqlDbType.Money:
+                                        writer.Write((double)value, types[i]);
+                                        break;
+                                    case NpgsqlDbType.Real:
+                                        writer.Write((Single)value, types[i]);
+                                        break;
+                                    case NpgsqlDbType.Smallint:
+
+                                        try
+                                        {
+                                            if (properties[i].GetType() == typeof(byte))
+                                            {
+                                                var swap = Convert.ToInt16(value);
+                                                writer.Write((short)swap, types[i]);
+                                                break;
+                                            }
+                                            writer.Write((short)value, types[i]);
+                                        }
+                                        catch (Exception ex)
+                                        {
+                                            string ms = ex.Message;
+                                        }
+
+                                        break;
+                                    case NpgsqlDbType.Varchar:
+                                    case NpgsqlDbType.Text:
+                                        writer.Write((string)value, types[i]);
+                                        break;
+                                    case NpgsqlDbType.Uuid:
+                                        writer.Write((Guid)value, types[i]);
+                                        break;
+                                    case NpgsqlDbType.Xml:
+                                        writer.Write((string)value, types[i]);
+                                        break;
+                                }
+                            }
+                        }
+                    }
+                    writer.Complete();
+                }
+            }
+            catch (Exception ex)
+            {
+                throw new Exception("Error executing NpgSqlBulkCopy.WriteToServer().  See inner exception for details", ex);
+            }
+        }
+        public static IEnumerable<DBINFO> DataTableConvertToIEnumerable(DataTable dt)
+        {
+            var infos = new List<DBINFO>();
+            foreach (DataRow row in dt.Rows)
+            {
+                var info = new DBINFO
+                {
+                    oid = (long)Convert.ToDouble(row["oid"]),
+                    equips = row["equips"].ToString(),
+                    typeid = (long)Convert.ToDouble(row["typeid"]),
+                    cxkg = (long)Convert.ToDouble(row["cxkg"]),
+                    年份 = Convert.ToInt32(row["年份"]),
+                    start_conn = row["start_conn"].ToString(),
+                    end_conn = row["end_conn"].ToString(),
+                    sbzlx = (long)Convert.ToDouble(row["sbzlx"]),
+                    type = row["type"].ToString(),
+                    // shape = row["shape"].ToString(),
+                    devicetype = Convert.ToInt32(row["devicetype"]),
+                    devicename = row["devicename"].ToString(),
+                    blackname = row["blackname"].ToString(),
+                    kgzt = Convert.ToInt32(row["kgzt"]),
+                    sbid = row["sbid"].ToString(),
+                    xlcd = Convert.ToDouble(row["xlcd"]),
+                    //NAME = row["NAME"].ToString()
+                };
+                infos.Add(info);
+            }
+            return infos.AsEnumerable();
+        }
+
+    }
+    public class DBINFO
+    {
+        public long oid { get; set; }
+        public string equips { get; set; }
+        public long typeid { get; set; }
+        public long cxkg { get; set; }
+        public int 年份 { get; set; }
+        public string start_conn { get; set; }
+        public string end_conn { get; set; }
+        public long sbzlx { get; set; }
+        public string type { get; set; }
+        //public string shape { get; set; }
+        public int devicetype { get; set; }
+        public string devicename { get; set; }
+        public string blackname { get; set; }
+        public int kgzt { get; set; }
+        public string sbid { get; set; }
+        public double xlcd { get; set; }
+        //public string NAME { get; set; }
+    }
+    public class ServerDBInfo
+    {
+        public long oid { get; set; }
+        public string equips { get; set; }
+        public long typeid { get; set; }
+        public long cxkg { get; set; }
+    }
+    public class CSINFO
+    {
+        public long oid { get; set; }
+        public string sbmc { get; set; }
+        public long dydj { get; set; }
+        public long sbzlx { get; set; }
+        public long ssdz { get; set; }
+        public long ssjg { get; set; }
+        public long kgzt { get; set; }
+    }
+}

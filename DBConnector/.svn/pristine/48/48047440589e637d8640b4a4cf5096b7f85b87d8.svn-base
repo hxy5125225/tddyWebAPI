@@ -1,0 +1,472 @@
+﻿using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using Npgsql;
+using System;
+using System.Collections.Generic;
+using System.Data;
+using System.Data.SqlClient;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace DBConnector.SQLServer
+{
+    public class SQLResouce
+    {
+        public string ConnectString;
+        public string DatabaseName;
+        public int Context;
+        public string UnitSerialNumber;
+        public string CurrentCity;
+        public int PresentYear;
+        public int CurrentYear;
+        public int DbType;
+        public SQLResouce(string ConnectString, string DatabaseName, string UnitSerialNumber, string CurrentCity, int Context, int PresentYear, int CurrentYear,int Dbtype)
+        {
+            this.ConnectString = ConnectString;
+            this.DatabaseName = DatabaseName;
+            this.UnitSerialNumber = UnitSerialNumber;
+            this.CurrentCity = CurrentCity;
+            this.Context = Context;
+            this.PresentYear = PresentYear;
+            this.CurrentYear = CurrentYear;
+            this.DbType = Dbtype;
+        }
+
+
+        public Dictionary<int, System.Data.DataTable> BuildHTopoDatas(System.Data.DataTable alldatas)
+        {
+            Dictionary<int, System.Data.DataTable> dic_data = new Dictionary<int, System.Data.DataTable>();
+            dic_data.Add(0, null); dic_data.Add(1, null); dic_data.Add(2, null);
+            try
+            {
+                System.Data.DataTable dt;
+                dt = BuildNewTable(alldatas, alldatas.Select(" 设备类型='1'"));
+                dic_data[0] = dt;
+                dt = BuildNewTable(alldatas, alldatas.Select(" 设备类型='0'"));
+                dic_data[1] = dt;
+                dt = BuildNewTable(alldatas, alldatas.Select(" 设备类型='7'"));
+                dic_data[2] = dt;
+            }
+            catch (System.Exception ex)
+            {
+
+            }
+            return dic_data;
+        }
+
+        public int GetTopoDatasource(out double loadrate, out int segment_cap, out int segment_num, out double stuck_neck_loadrate, out Dictionary<int, System.Data.DataTable> smart_dic, out Dictionary<int, System.Data.DataTable> delete_dic, out Dictionary<int, System.Data.DataTable> topodata_dic, out List<string> FIDS, int flag, string feedername = "")
+        {
+            System.Data.DataTable topodt, smartdt = new DataTable(), deletetd = new DataTable();
+            loadrate = 0.1;
+            segment_cap = 1;
+            segment_num = 1;
+            stuck_neck_loadrate = 1;
+            FIDS = new List<string>();
+            smart_dic = new Dictionary<int, DataTable>();
+            delete_dic = new Dictionary<int, DataTable>();
+            topodata_dic = new Dictionary<int, DataTable>();
+            if (this.DbType == 0)
+            {
+                SqlConnection connection = TddyLocalDBHelper.InitSqlConnection(ConnectString, DatabaseName, Context);//启动数据库连接;
+                runProcBuildTopoGraphMsg_update(0, ConnectString, UnitSerialNumber, DatabaseName);
+                topodt = ExecuteTddyDataTable(0, ConnectString, System.Data.CommandType.Text, string.Format(TddyProCal.typical_parameter_data_ource, CurrentCity), null);
+                loadrate = double.Parse(topodt.Rows[0][0].ToString());
+                segment_cap = (int)double.Parse(topodt.Rows[1][0].ToString());
+                segment_num = (int)double.Parse(topodt.Rows[2][0].ToString());
+                stuck_neck_loadrate = !topodt.Columns.Contains("卡脖子负载率") || topodt.Rows[3][0].ToString() == "" ? 0.6 : double.Parse(topodt.Rows[3][0].ToString());
+
+                if (flag == 3 && !TddyLocalDBHelper.IsChanged(ConnectString, DatabaseName, UnitSerialNumber, CurrentCity, Context) && Context != 0) return -1;
+                if (feedername == "")
+                {
+                    DateTime _starTime = DateTime.Now;
+                    GraphProcedure.dropTempTableByName(connection, null, "##Temp_TOPO", UnitSerialNumber, DatabaseName, CurrentCity);
+                    GraphProcedure.GengenerateRegionTopologyData(0, ConnectString, UnitSerialNumber, DatabaseName, PresentYear, TddyLocalDBHelper.GetUpdateTime("拓扑", ConnectString, DatabaseName, UnitSerialNumber, Context), LightweightRAS.PublicKeyDecrypt(GZipUtil.UnZip(TddyProCal.Generate_Region_wide_topology_datasource)));
+                    TimeSpan timeSpan = DateTime.Now - _starTime;
+                    topodt = TddyLocalDBHelper.ExecuteTddyDataTable(connection, null, System.Data.CommandType.Text, string.Format(TddyProCal.Equipment_Data_Index, DatabaseName, UnitSerialNumber), null);
+                    foreach (System.Data.DataRow row in topodt.Rows)
+                    {
+                        FIDS.Add(row["设备名称"].ToString().ToLower());
+                    }
+                    topodt = TddyLocalDBHelper.ExecuteTddyDataTable(connection, null, System.Data.CommandType.Text, TddyProCal.Region_wide_topology_datasource, null);
+                    if (Context == 0)
+                    {
+                        smartdt = TddyLocalDBHelper.ExecuteTddyDataTable(connection, null, System.Data.CommandType.Text, TddyProCal.Region_wide_topology_datasource_dis, null);
+                        smart_dic = BuildTopoDatas(smartdt, 1);
+                        deletetd = TddyLocalDBHelper.ExecuteTddyDataTable(connection, null, System.Data.CommandType.Text, TddyProCal.Region_wide_topology_delete_datasource, null);
+                        delete_dic = BuildTopoDatas(deletetd, 2);
+                    }
+                }
+                else
+                {
+                    GraphProcedure.dropTempTableByName(connection, null, "##TempLineTopo", UnitSerialNumber, DatabaseName, CurrentCity);
+                    GraphProcedure.GengenerateSingleTopologyDataCheck(0, ConnectString, UnitSerialNumber, DatabaseName, CurrentYear, feedername, TddyLocalDBHelper.GetUpdateTime("拓扑", ConnectString, DatabaseName, UnitSerialNumber, Context), LightweightRAS.PublicKeyDecrypt(GZipUtil.UnZip("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")));
+                    topodt = TddyLocalDBHelper.ExecuteTddyDataTable(connection, null, System.Data.CommandType.Text, TddyProCal.Single_line_topology_datasource, null);
+                }
+                topodata_dic = BuildTopoDatas(topodt);
+            }
+            else
+            {
+                topodata_dic = new Dictionary<int, System.Data.DataTable>();
+                using (NpgsqlConnection cn = new NpgsqlConnection("Server=172.16.144.252;Port=19200;User Id=gis;Password=GIS20_sig;Database=fzgis;Encoding=UNICODE"))
+                {
+                    cn.Open();
+                    NpgsqlCommand cmd = new NpgsqlCommand(TddyProCal.dl_subs_sources, cn);
+                    DataTable datatable = new DataTable();
+                    NpgsqlDataAdapter adapter = new NpgsqlDataAdapter(cmd);
+                    DataSet daset = new DataSet();
+                    adapter.Fill(daset);
+                    datatable = daset.Tables[0];
+                    topodata_dic.Add(0, datatable);
+                    cmd.Parameters.Clear();
+                    cmd.Dispose();
+
+
+                    cmd = new NpgsqlCommand(LightweightRAS.PublicKeyDecrypt(GZipUtil.UnZip(TddyProCal.subno_sources)), cn);
+                    datatable = new DataTable();
+                    adapter = new NpgsqlDataAdapter(cmd);
+                    daset = new DataSet();
+                    adapter.Fill(daset);
+                    datatable = daset.Tables[0];
+                    topodata_dic.Add(5, datatable);
+                    cmd.Parameters.Clear();
+                    cmd.Dispose();
+
+                    cmd = new NpgsqlCommand(LightweightRAS.PublicKeyDecrypt(GZipUtil.UnZip(TddyProCal.dl_lines_sources)), cn);
+                    adapter = new NpgsqlDataAdapter(cmd);
+                    daset = new DataSet();
+                    adapter.Fill(daset);
+                    datatable = daset.Tables[0];
+                    System.Data.DataTable dt;
+                    if (flag == 0)
+                    {
+                        dt = BuildNewTable(datatable, datatable.Select(" devicetype=7 or devicetype=3 or  devicetype=5"));
+                        topodata_dic.Add(2, dt);
+                        dt = new DataTable();
+                        topodata_dic.Add(4, dt);
+                    }
+                    else
+                    {
+                        topodata_dic.Add(0, new DataTable());
+                        topodata_dic.Add(2, new DataTable());
+                        topodata_dic.Add(4, new DataTable());
+                    }
+                    dt = BuildNewTable(datatable, datatable.Select(" devicetype=2"));
+                    topodata_dic.Add(1, dt);
+                    dt = new DataTable();
+                    topodata_dic.Add(3, dt);
+                    cmd.Parameters.Clear();
+                    cmd.Dispose();
+                }
+            }
+            return 0;
+        }
+
+        public Dictionary<int, System.Data.DataTable> BuildTopoDatas(System.Data.DataTable alldatas, int flag = 0)
+        {
+            Dictionary<int, System.Data.DataTable> dic_data = new Dictionary<int, System.Data.DataTable>();
+            try
+            {
+                System.Data.DataTable dt;
+                if (flag == 0 || flag == 2)
+                {
+                    dt = BuildNewTable(alldatas, alldatas.Select(" 设备类型='变电站'"));
+                    dic_data.Add(0, dt);
+
+                    dt = BuildNewTable(alldatas, alldatas.Select(" 设备类型='开关设施'"));
+                    dic_data.Add(2, dt);
+
+                    dt = BuildNewTable(alldatas, alldatas.Select(" 设备类型='电源'"));
+                    dic_data.Add(4, dt);
+                }
+                else
+                {
+                    dic_data.Add(0, new DataTable());
+                    dic_data.Add(2, new DataTable());
+                    dic_data.Add(4, new DataTable());
+                }
+                dt = BuildNewTable(alldatas, alldatas.Select(" 设备类型='中压线路'"));
+                dic_data.Add(1, dt);
+                dt = BuildNewTable(alldatas, alldatas.Select(" 设备类型='配电设施'"));
+                dic_data.Add(3, dt);
+            }
+            catch (System.Exception ex)
+            {
+
+            }
+            return dic_data;
+        }
+
+        public System.Data.DataTable BuildNewTable(System.Data.DataTable projects, System.Data.DataRow[] dt)
+        {
+            System.Data.DataTable newdt = new System.Data.DataTable();
+            newdt = projects.Clone();
+            for (int i = 0; i < dt.Length; i++)
+            {
+                newdt.ImportRow((System.Data.DataRow)dt[i]);
+            }
+            return newdt;
+        }
+        public void runProcWTKShengChengWenTiProcedure(int dbtype, string connect, string UnitSerialNumber, string DatabaseName)
+        {
+            try
+            {
+                SqlParameter[] parms = { new SqlParameter("@Area", UnitSerialNumber) };
+                ExecuteNonQuery(dbtype, connect, CommandType.StoredProcedure, DatabaseName + "." + "[Proc_WTK_ShengChengWenTi]", parms);
+            }
+            catch (System.Exception ex) { }
+        }
+
+
+        /// <summary>
+        /// 打开或退出软件时清空临时表
+        /// </summary>
+        /// <param name="connection"></param>
+        /// <param name="sqltransaction"></param>
+        public void runProcDropUndoTable(int dbtype, string connect, string UnitSerialNumber, string DatabaseName)
+        {
+            try
+            {
+                ExecuteNonQuery(dbtype, connect, CommandType.StoredProcedure, DatabaseName + "." + "[Proc_DropUndoTable]", null);
+            }
+            catch (System.Exception ex) { }
+        }
+        public void runProcBuildTopoGraphMsg_update(int dbtype, string connect, string UnitSerialNumber, string DatabaseName)
+        {
+            try
+            {
+
+                SqlParameter[] parms = { new SqlParameter("@CountyID", UnitSerialNumber) };
+
+                ExecuteNonQuery(dbtype, connect, CommandType.StoredProcedure, DatabaseName + "." + "[Proc_BuildTopoGraphMsg_update]", parms);
+            }
+            catch (System.Exception ex) { }
+        }
+        private static int ExecuteNonQuery(int dbtype, string conntect, CommandType commandType, string commandText, params SqlParameter[] parms)
+        {
+            int retval = -1;
+            try
+            {
+                if (dbtype == 0)//sqlserver
+                {
+                    using (SqlConnection cn = new SqlConnection(conntect))
+                    {
+                        using (SqlCommand cmd = cn.CreateCommand())
+                        {
+                            cmd.CommandType = commandType;
+                            cmd.CommandText = commandText;
+                            cmd.Parameters.AddRange(parms);
+                            cn.Open();
+                            retval = cmd.ExecuteNonQuery();
+                        }
+                    }
+                }
+                else//PG dbtype == 1
+                {
+                    using (NpgsqlConnection cn = new NpgsqlConnection(conntect))
+                    {
+                        using (NpgsqlCommand cmd = new NpgsqlCommand())
+                        {
+                            cmd.CommandType = commandType;
+                            cmd.CommandText = commandText;
+                            cmd.Parameters.Add(parms);
+                            cn.Open();
+                            retval = cmd.ExecuteNonQuery();
+                        }
+                    }
+                }
+            }
+            catch (System.Exception e) { }
+            return retval;
+        }
+        public DataTable ExecuteTddyDataTable(int dbtype, string conntect, CommandType commandType, string commandText, params SqlParameter[] parms)
+        {
+
+            DataTable datatable = new DataTable();
+            try
+            {
+                if (dbtype == 0)//sqlserver
+                {
+                    using (SqlConnection cn = new SqlConnection(conntect))
+                    {
+                        using (SqlCommand cmd = cn.CreateCommand())
+                        {
+                            cmd.Connection = cn;
+                            cmd.CommandTimeout = 0;
+                            cmd.CommandText = commandText;// 设置命令文本(存储过程名或SQL语句)
+                            cmd.CommandType = commandType; // 设置命令类型.
+                            if (parms != null && parms.Length > 0) cmd.Parameters.Add(parms);
+                            cn.Open();
+                            SqlDataReader dataReader = cmd.ExecuteReader();
+                            ///动态添加表的数据列
+                            for (int i = 0; i < dataReader.FieldCount; i++)
+                            {
+                                DataColumn myDataColumn = new DataColumn();
+                                myDataColumn.DataType = dataReader.GetFieldType(i);
+                                myDataColumn.ColumnName = dataReader.GetName(i);
+                                datatable.Columns.Add(myDataColumn);
+                            }
+                            ///添加表的数据
+                            while (dataReader.Read())
+                            {
+                                DataRow myDataRow = datatable.NewRow();
+                                for (int i = 0; i < dataReader.FieldCount; i++)
+                                {
+                                    myDataRow[i] = dataReader[i];
+                                }
+                                datatable.Rows.Add(myDataRow);
+                                myDataRow = null;
+                            }
+                            dataReader.Close();
+                        }
+                    }
+                }
+                else if (dbtype == 1)//PG
+                {
+                    using (NpgsqlConnection cn = new NpgsqlConnection(conntect))
+                    {
+                        using (NpgsqlCommand cmd = new NpgsqlCommand())
+                        {
+                            cmd.Connection = cn;
+                            cmd.CommandTimeout = 0;
+                            cmd.CommandText = commandText;// 设置命令文本(存储过程名或SQL语句)
+                            cmd.CommandType = commandType; // 设置命令类型.
+                            if (parms != null && parms.Length > 0) cmd.Parameters.Add(parms);
+                            cn.Open();
+                            NpgsqlDataReader dataReader = cmd.ExecuteReader();
+                            ///动态添加表的数据列
+                            for (int i = 0; i < dataReader.FieldCount; i++)
+                            {
+                                DataColumn myDataColumn = new DataColumn();
+                                myDataColumn.DataType = dataReader.GetFieldType(i);
+                                myDataColumn.ColumnName = dataReader.GetName(i);
+                                datatable.Columns.Add(myDataColumn);
+                            }
+                            ///添加表的数据
+                            while (dataReader.Read())
+                            {
+                                DataRow myDataRow = datatable.NewRow();
+                                for (int i = 0; i < dataReader.FieldCount; i++)
+                                {
+                                    myDataRow[i] = dataReader[i];
+                                }
+                                datatable.Rows.Add(myDataRow);
+                                myDataRow = null;
+                            }
+                            dataReader.Close();
+                        }
+                    }
+                }
+                else if (dbtype == 3)//oracle
+                {
+
+
+                }
+                else//mysql dbtype == 4
+                {
+
+
+                }
+            }
+            catch (System.Exception ex) { }
+            return datatable;
+        }
+        public void ExecuteTableToDBTable(SqlConnection connection, System.Data.DataTable dt, string tableName)
+        {
+            using (SqlBulkCopy bulkCopy = new SqlBulkCopy(connection))
+            {
+                try
+                {
+                    bulkCopy.BulkCopyTimeout = dt.Rows.Count;
+                    bulkCopy.DestinationTableName = tableName;//要插入的表的表名
+                    bulkCopy.BatchSize = dt.Rows.Count;
+                    for (int i = 0; i < dt.Columns.Count; i++)
+                    {
+                        bulkCopy.ColumnMappings.Add(dt.Columns[i].ColumnName, dt.Columns[i].ColumnName);
+                    }
+                    bulkCopy.WriteToServer(dt);
+                }
+                catch (Exception ex)
+                {
+
+                }
+                finally
+                {
+                }
+            }
+        }
+
+        public void GetPublishParam(out int arrow, out double branchratio, out int istrunkline, out int isnewdraw, out int trangraph, out int trantext, out int switchtext, string pubkey, string ConnectString, string DatabaseName, string UnitSerialNumber, int context)
+        {
+            arrow = 1;
+            branchratio = 1;
+            istrunkline = 1;
+            isnewdraw = 2;
+            trangraph = 1;
+            trantext = 1;
+            switchtext = 1;
+            string sql = "select 应用范围 from " + DatabaseName + ".典型参数表  where 单位='" + UnitSerialNumber + "' and 参数名称='" + pubkey + "'";
+            SqlConnection connection = TddyLocalDBHelper.InitSqlConnection(ConnectString, DatabaseName, context);//启动数据库连接
+            System.Data.DataTable dt = TddyLocalDBHelper.ExecuteDataTable(connection, CommandType.Text, sql);
+            if (dt.Rows.Count > 0)
+            {
+                JObject json = (JObject)JsonConvert.DeserializeObject(dt.Rows[0][0].ToString());
+                if (json.Property("新建线路显示(1：红色,2：虚线)") == null)
+                {
+                    json = (JObject)JsonConvert.DeserializeObject("{\"新建线路显示(1：红色,2：虚线)\": 1,\"电缆线路显示(1：箭头,2：虚线)\": 1,  \"分支占比(0-1)\": 1, \"包含分支(包含1,不包含0)\": 1, \"绘制开关设施名称(1：绘制,0：不绘制)\": 1, \"绘制配电设施(1：绘制,0：不绘制)\": 1, \"绘制配电设施名称(1：绘制,0：不绘制)\": 1 }");
+                }
+                isnewdraw = int.Parse(json["新建线路显示(1：红色,2：虚线)"].ToString());
+                arrow = int.Parse(json["电缆线路显示(1：箭头,2：虚线)"].ToString());
+                branchratio = double.Parse(json["分支占比(0-1)"].ToString());
+                istrunkline = int.Parse(json["包含分支(包含1,不包含0)"].ToString());
+                if (json.Property("绘制开关设施名称(1：绘制,0：不绘制)") != null) switchtext = int.Parse(json["绘制开关设施名称(1：绘制,0：不绘制)"].ToString());
+                if (json.Property("绘制配电设施(1：绘制,0：不绘制)") != null) trangraph = int.Parse(json["绘制配电设施(1：绘制,0：不绘制)"].ToString());
+                if (json.Property("绘制配电设施名称(1：绘制,0：不绘制)") != null) trantext = int.Parse(json["绘制配电设施名称(1：绘制,0：不绘制)"].ToString());
+            }
+        }
+
+        public List<int> ConfigPlanningLevelYear(string ConnectString, string DatabaseName, string UnitSerialNumber, int context, int flag, List<int> years = null)
+        {
+            List<int> year = new List<int>();
+            try
+            {
+                if (string.IsNullOrEmpty(UnitSerialNumber)) return year;
+
+                string sql = "SELECT 应用范围  FROM " + DatabaseName + ".典型参数表 where 序号='" + UnitSerialNumber + "' and 参数名称='规划水平年'";
+
+                string Connection = ConnectString;
+                SqlConnection connection = TddyLocalDBHelper.InitSqlConnection(ConnectString, DatabaseName, context);//启动数据库连接;
+                System.Data.DataTable dt = TddyLocalDBHelper.ExecuteDataTable(connection, CommandType.Text, sql);
+                if (flag == 0)//查询
+                {
+                    dt = TddyLocalDBHelper.ExecuteDataTable(connection, CommandType.Text, sql);
+                    if (dt != null && dt.Rows.Count > 0)
+                    {
+                        year = JsonConvert.DeserializeObject<List<int>>(dt.Rows[0][0].ToString());
+                    }
+                }
+                else if (flag == 1)//插入
+                {
+                    sql = "insert into   " + DatabaseName + ".典型参数表 (应用范围,序号,参数名称)  values('{0}','{1}','规划水平年')";
+                    if (dt != null && dt.Rows.Count > 0)
+                    {
+                        sql = "update   " + DatabaseName + ".典型参数表 set  应用范围='{0}' where 序号='{1}' and 参数名称='规划水平年'";
+                    }
+                    sql = string.Format(sql, Newtonsoft.Json.JsonConvert.SerializeObject(years), UnitSerialNumber);
+                    TddyLocalDBHelper.ExecuteTddyNonQuery(connection, null, sql, null);
+                }
+                else if (flag == 2)//更新
+                {
+                    sql = "update   " + DatabaseName + ".典型参数表 set  应用范围='{0}' where 序号='{1}' and 参数名称='规划水平年'";
+                    sql = string.Format(sql, Newtonsoft.Json.JsonConvert.SerializeObject(years), UnitSerialNumber);
+                    TddyLocalDBHelper.ExecuteTddyNonQuery(connection, null, sql, null);
+                }
+            }
+            catch
+            {
+            }
+            return year;
+        }
+
+    }
+}

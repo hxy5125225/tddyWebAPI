@@ -1,0 +1,3075 @@
+
+using DBConnector.Oracle;
+using DBConnector.PG;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using Npgsql;
+using NpgsqlTypes;
+using Oracle.ManagedDataAccess.Client;
+using RestSharp;
+using System;
+using System.Collections.Generic;
+using System.Data;
+using System.Linq;
+using System.Runtime.InteropServices;
+using System.Text;
+using System.Threading.Tasks;
+namespace DBConnector
+{
+    public class InterfaceClass
+    {
+        public int callLoad;
+
+        public string loadTime;
+        public decimal taskCount;
+        public void InitialParameter()
+        {
+            ConfigClass.Initial_PG_Config();
+        }
+        public Dictionary<long, int> dicStatus = new Dictionary<long, int>();
+        public string task_id;
+        public string parameter;
+        public static List<object> paramList = new List<object>();
+        List<object> paramObjList = new List<object>();
+		public string dept_code;
+        public string sg_code;
+        public string dwxh;
+        public string startTime;
+        public bool isError = false;
+        public bool isSuccess;
+        
+        public Dictionary<long, int> listTLStatus = new Dictionary<long, int>();
+        /// <summary>
+        /// 获取准备参数：parameter、dept_code、sg_code、dwxh、startTime、变电站查询结果
+        /// </summary>
+        /// <param name="dtResult_Sub">变电站查询结果</param>
+        /// <returns>馈线信息表</returns>
+        public DataTable GetParameter(ref DataTable dtResult_Sub)
+        {
+            DataTable dtResult_feeder = new DataTable();
+            Npgsql.NpgsqlConnection GhdwConn = null;
+            OracleConnection oracleConn = null;
+            if (string.IsNullOrEmpty(task_id)) return dtResult_feeder; //任务ID 
+            try
+            {
+                #region 数据库启动连接 
+                InitialParameter();
+                PGGhdwConn pggh = new PGGhdwConn();
+                GhdwConn = pggh.conn;
+                OracleConn oracle = new OracleConn();
+                oracleConn = oracle.conn;
+                #endregion
+                PGClass.taskId = task_id;
+                PGClass.SaveLogInfo(new List<object[]>() { new object[] { task_id, "任务开始，开始查询变电站" } }, GhdwConn);
+                #region 任务查询 fzgis_ghdw数据库 获取parameter dwxh
+                DataTable dt_PG_Task = PG.PGClass.QueryNpgDatabase(GhdwConn, ConfigClass.PG_QuerySql_Task, new List<object>() { task_id });
+                if (dt_PG_Task == null || dt_PG_Task.Rows.Count == 0)
+                {
+                    isError = true;
+                    isSuccess = false;
+                    PGClass.SaveLogInfo(new List<object[]>() { new object[] { task_id, "dt_PG_Task:" + dt_PG_Task.Rows.Count } }, GhdwConn);
+                    return dtResult_feeder;
+                }
+                string replaceSql = ConfigClass.PG_QuerySql_Substation;
+                StringBuilder sb = new StringBuilder("(");
+                StringBuilder hsb = new StringBuilder("(");
+                if (dt_PG_Task.Rows[0]["is_base"].ToString() == "1")
+                {
+                    //parameterObj = "task_id='" + dt_PG_Task.Rows[0]["task_id"] + "' and hash_part=" + dt_PG_Task.Rows[0]["hash_part"];
+                    parameter = "task_id=@param0 and hash_part=@param1";
+                    replaceSql = string.Format(replaceSql, parameter);
+                    paramList.Add(dt_PG_Task.Rows[0]["task_id"]);
+                    paramList.Add(dt_PG_Task.Rows[0]["hash_part"]);
+                }
+                else
+                {
+                    int count = dt_PG_Task.Rows.Count;
+                    for (int i = 0; i < count; i++)
+                    {
+                        if (string.IsNullOrEmpty(dt_PG_Task.Rows[i]["task_id"].ToString()) || string.IsNullOrEmpty(dt_PG_Task.Rows[i]["hash_part"].ToString())) continue;
+                        if (i == count - 1)
+                        {
+                            sb.Append("'" + dt_PG_Task.Rows[i]["task_id"] + "'");
+                            hsb.Append(dt_PG_Task.Rows[i]["hash_part"]);
+                        }
+                        else
+                        {
+                            sb.Append("'" + dt_PG_Task.Rows[i]["task_id"] + "',");
+                            hsb.Append(dt_PG_Task.Rows[i]["hash_part"] + ",");
+                        }
+                    }
+                    if (sb[sb.Length - 1].ToString() == ",")
+                        sb.Remove(sb.Length - 1, 1);
+                    sb.Append(")");
+                    if (hsb[hsb.Length - 1].ToString() == ",")
+                        hsb.Remove(hsb.Length - 1, 1);
+                    hsb.Append(")");
+                    //parameterObj = "(CASE WHEN task_id = '" + task_id + "' THEN 1 = 1 ELSE(indate = udate OR udate > to_timestamp('" + dt_PG_Task.Rows[0]["topodate"] + "', 'yyyy-MM-dd hh24:mi:ss')) END) AND task_id IN " + sb.ToString() + " AND hash_part IN " + hsb.ToString();
+                    parameter = "(CASE WHEN task_id = @param0 THEN 1 = 1 ELSE(indate = udate OR udate > to_timestamp(@param1, 'yyyy-MM-dd hh24:mi:ss')) END) AND task_id IN " + sb.ToString() + " AND hash_part IN " + hsb.ToString();
+                    replaceSql = string.Format(replaceSql, parameter);
+                    paramList.Add(task_id);
+                    paramList.Add(dt_PG_Task.Rows[0]["topodate"]);
+                    sb.Clear();
+                    hsb.Clear();
+                }
+                dwxh = dt_PG_Task.Rows[0]["dwxh"].ToString();
+                #endregion
+                #region 查询省份ID 获取dept_code year
+                DataTable dt_PG_ProvinceID = PG.PGClass.QueryNpgDatabase(GhdwConn, ConfigClass.PG_QuerySql_ProvinceID, new List<object>() { task_id });
+                if (dt_PG_ProvinceID == null || dt_PG_ProvinceID.Rows.Count == 0)
+                {
+                    isError = true;
+                    PGClass.SaveLogInfo(new List<object[]>() { new object[] { task_id, "dt_PG_ProvinceID:" + dt_PG_ProvinceID.Rows.Count } }, GhdwConn);
+                    isSuccess = false;
+                    return dtResult_feeder;
+                }
+                dept_code = dt_PG_ProvinceID.Rows[0]["sg_code"].ToString();
+                sg_code = dept_code;
+                //int year = int.Parse(dt_PG_ProvinceID.Rows[0]["year"].ToString());
+                #endregion
+                #region 创建临时表 
+                //创建临时表Oracle: topo_sb_line_sbid
+                Oracle.OracleClass.CreateTempTable(oracleConn);
+                #endregion 
+                #region 查询变电站参数表 
+                DataTable dtpara_Sub = PG.PGClass.QueryNpgDatabase(GhdwConn, replaceSql, paramList);
+                Oracle.OracleClass.ContrastTableAndWrite(dtpara_Sub, oracleConn, ConfigClass.dicContrastOracleTempTable, "topo_sb_line_sbid");
+                DataTable dt_Oracle_Sub = Oracle.OracleClass.QueryOracleDatabase(ConfigClass.Oracle_Query_BDZDACX, new List<object>() { dept_code }, oracleConn);//查询变电站Oracle  
+                //DataTable dt_Oracle_Sub = Oracle.OracleClass.QueryOracleDatabase(string.Format(ConfigClass.Oracle_Query_BDZDACX, dept_code), oracleConn);//查询变电站Oracle  
+                dtResult_Sub = DataTableClass.OperateLeftJoin(GetTableByCondition(dtpara_Sub, "devicetype=0"), dt_Oracle_Sub, new List<string>() { "sbid" }, new List<string>() { "DWZY_ID" });//拼接 
+                PGClass.SaveLogInfo(new List<object[]>() { new object[] { task_id, "查询变电站结束,准备拓扑查询数据以及母线数据" } }, GhdwConn);
+                #endregion
+                #region 获取馈线数据 
+                dtResult_feeder = GetTableByCondition(dtpara_Sub, "devicetype=1");
+                dtResult_feeder = DataTableClass.Distinct(dtResult_feeder, "xl_oid");
+                #endregion
+
+                #region 释放资源
+                DataTableClass.Dispose(dt_PG_Task);
+                DataTableClass.Dispose(dtpara_Sub);
+                DataTableClass.Dispose(dt_PG_ProvinceID);
+                DataTableClass.Dispose(dt_Oracle_Sub);
+                #endregion 
+            }
+            catch (Exception ex)
+            {
+                PGClass.SaveLogInfo(new List<object[]>() { new object[] { task_id, "异常：" + ex.Message + ex.StackTrace } }, GhdwConn);
+                isSuccess = false;
+                throw new Exception(ex.StackTrace + Environment.NewLine + ex.Message);
+
+            }
+            finally
+            {
+                //编写异常信息
+                try
+                {
+                    if (GhdwConn != null)
+                    {
+                        GhdwConn.Close();
+                        GhdwConn.Dispose();
+                    }
+                    if (oracleConn != null)
+                    {
+                        oracleConn.Close();
+                        oracleConn.Dispose();
+                    }
+                }
+                catch (Exception e) { throw new Exception(e.StackTrace + e.Message); }
+            }
+            return dtResult_feeder;
+        }
+        /// <summary>
+        /// 处理异常线路并返回结果oid进行拓扑查询
+        /// </summary>
+        /// <param name="dtpara_Feeder">馈线数据</param>
+        /// <param name="dt_pg_mxh">返回母线号表</param>
+        /// <param name="dtErrXl">返回异常线路数据</param>
+        public void GetMiddlePara(DataTable dtpara_Feeder, ref DataTable dt_pg_mxh, ref DataTable dtErrXl)
+        {
+            Npgsql.NpgsqlConnection GhdwConn = null;
+            try
+            {
+                PGGhdwConn pggh = new PGGhdwConn();
+                GhdwConn = pggh.conn;
+                DataTable dt = new DataTable();
+                dt.Columns.Add("oid", typeof(long));
+                dt.Columns.Add("typeid", typeof(long));
+                dt.Columns.Add("cxkg", typeof(long));
+                dt.Columns.Add("cxkglx", typeof(long));
+                DataTable dtYC = new DataTable();
+                dtYC.Columns.Add("xl_oid", typeof(long));
+                dtYC.Columns.Add("cxkg", typeof(long));
+                dtYC.Columns.Add("cxkglx", typeof(long));
+                dtYC.Columns.Add("mx_id", typeof(long));
+                List<object> listOid = new List<object>();
+                DeviceInfo devInfo;
+                long xl_oid = 0;
+                long cxkglx = 0;
+                bool status = true;
+                PGClass.SaveLogInfo(new List<object[]>() { new object[] { task_id, "准备拓扑查询数据以及母线数据开始" } }, GhdwConn);
+                DataTable dtpara_Sub = dtpara_Feeder.Copy();
+                List<string> cxkg_lx = new List<string>();
+                for (int i = 0; i < dtpara_Sub.Rows.Count; i++)
+                {
+                    cxkg_lx.Add(dtpara_Sub.Rows[i]["xl_cxkg"].ToString() + dtpara_Sub.Rows[i]["typeid"]);
+                }
+                foreach (DataRow drpara in dtpara_Sub.Rows)
+                {
+                    try
+                    {
+                        if (drpara["xl_cxkg"] == DBNull.Value || drpara["xl_cxkglx"] == DBNull.Value || drpara["typeid"] == DBNull.Value) continue;
+                        if (listOid.Contains(drpara["xl_cxkg"])) continue;
+                        listOid.Add(drpara["xl_cxkg"]);
+                        devInfo = new DeviceInfo();
+                        devInfo.typeid = Convert.ToInt64(drpara["typeid"] == DBNull.Value ? "0" : drpara["typeid"].ToString());
+                        devInfo.oid = Convert.ToInt64(drpara["xl_cxkg"] == DBNull.Value ? "0" : drpara["xl_cxkg"].ToString());
+                        xl_oid = Convert.ToInt64(drpara["xl_oid"] == DBNull.Value ? "0" : drpara["xl_oid"].ToString());
+                        cxkglx = Convert.ToInt64(drpara["xl_cxkglx"] == DBNull.Value ? "0" : drpara["xl_cxkglx"].ToString());
+                        ParaInfo paraInfo = new ParaInfo();
+                        paraInfo.equip = new List<DeviceInfo>() { devInfo };
+                        string url = ConfigClass.ServerDataIp + JsonConvert.SerializeObject(paraInfo) + ConfigClass.TopoQueryCondition;
+                        var client = new RestClient(url);
+                        client.Timeout = 600000;
+                        client.ThrowOnAnyError = true;
+                        var request = new RestRequest();
+                        request.Timeout = 600000;
+                        RestResponse response = (RestResponse)client.Execute(request);
+                        if (response.Content == null) continue;
+                        ResultValueInfo resInfo = null;
+                        try
+                        {
+                            resInfo = JsonConvert.DeserializeObject<ResultValueInfo>(response.Content);
+                        }
+                        catch
+                        {
+                            PGClass.SaveLogInfo(new List<object[]>() { new object[] { task_id, "GetMiddlePara拓扑接口查询异常，url：" + url } }, GhdwConn);
+                            if (status) isSuccess = false;
+                            status = false;
+                        }
+                        bool isError = false;
+                        long mx_id = 0;
+                        long Errcxkg = 0;
+                        if (resInfo.stopequips != null)
+                        {
+                            foreach (DeviceInfo item in resInfo.stopequips)
+                            {
+                                if (item.oid == 0 || item.typeid == 0)
+                                    continue;
+                                if (item.oid != devInfo.oid || item.typeid != devInfo.typeid)
+                                {
+                                    if (cxkg_lx.Contains(item.oid + "" + item.typeid))
+                                    {
+                                        isError = true;
+                                        Errcxkg = item.oid;
+                                    }
+                                }
+                                if (item.typeid == 311000)
+                                {
+                                    mx_id = item.oid;
+                                }
+                            }
+                            if (isError)
+                            {
+                                if (mx_id > 0)
+                                    dtYC.Rows.Add(new object[] { xl_oid, devInfo.oid, devInfo.typeid, mx_id });
+                                else
+                                {
+                                    dtYC.Rows.Add(new object[] { xl_oid, devInfo.oid, devInfo.typeid, Errcxkg });
+                                }
+                                foreach (DeviceInfo item in resInfo.stopequips)
+                                {
+                                    if (item.oid == 0 || item.typeid == 0)
+                                        continue;
+                                    dt.Rows.Add(new object[] { item.oid, item.typeid, devInfo.oid, devInfo.typeid });
+                                }
+                            }
+                            else
+                            {
+                                if (mx_id > 0)
+                                    dt.Rows.Add(new object[] { mx_id, 311000, devInfo.oid, devInfo.typeid });
+                            }
+                        }
+                        if (isError)
+                        {
+                            if (resInfo.lastequips != null)
+                            {
+                                foreach (DeviceInfo item in resInfo.lastequips)
+                                {
+                                    if (item.oid == 0 || item.typeid == 0)
+                                        continue;
+                                    dt.Rows.Add(new object[] { item.oid, item.typeid, devInfo.oid, devInfo.typeid });
+                                }
+                            }
+                            if (resInfo.otherequips != null)
+                            {
+                                foreach (DeviceInfo item in resInfo.otherequips)
+                                {
+                                    if (item.oid == 0 || item.typeid == 0)
+                                        continue;
+                                    dt.Rows.Add(new object[] { item.oid, item.typeid, devInfo.oid, devInfo.typeid });
+                                }
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        PGClass.SaveLogInfo(new List<object[]>() { new object[] { task_id, "GetMiddlePara异常：" + ex.Message + ex.StackTrace } }, GhdwConn);
+                    }
+                }
+                //创建临时表 PG: topo_sb_line_oid
+                PG.PGClass.CreateTempTable(GhdwConn, ConfigClass.PG_CreateTempTable);
+                PG.PGClass.WriteToServer(dt, "topo_sb_line_oid", GhdwConn);
+                dt_pg_mxh = PGClass.QueryNpgDatabase(GhdwConn, string.Format(ConfigClass.Topo_QueryTotal,parameter), paramList);
+                dtErrXl = dtYC;
+                PGClass.SaveLogInfo(new List<object[]>() { new object[] { task_id, "拓扑查询数据以及母线数据结束，准备获取出线开关到母线之间的线段开始" } }, GhdwConn);
+
+                #region 释放资源
+                DataTableClass.Dispose(dt);
+                DataTableClass.Dispose(dtpara_Sub);
+                listOid.Clear();
+                cxkg_lx.Clear();
+                #endregion
+
+
+
+            }
+            catch (Exception ex)
+            {
+                PGClass.SaveLogInfo(new List<object[]>() { new object[] { task_id, "异常：" + ex.Message + ex.StackTrace } }, GhdwConn);
+                isSuccess = false;
+                //throw new Exception(ex.StackTrace + Environment.NewLine + ex.Message);
+            }
+            finally
+            {
+                //编写异常信息
+                try
+                {
+                    if (GhdwConn != null)
+                    {
+                        GhdwConn.Close();
+                        GhdwConn.Dispose();
+                    }
+                }
+
+                catch (Exception e) { throw new Exception(e.StackTrace + e.Message); }
+            }
+        }
+        public void GetMiddleParaByTask(DataTable dtpara_Feeder, ref DataTable dt_pg_mxh, ref DataTable dtErrXl)
+        {
+            Npgsql.NpgsqlConnection GhdwConn = null;
+            try
+            {
+                PGGhdwConn pggh = new PGGhdwConn();
+                GhdwConn = pggh.conn;
+                DataTable dt = new DataTable();
+                dt.Columns.Add("oid", typeof(long));
+                dt.Columns.Add("typeid", typeof(long));
+                dt.Columns.Add("cxkg", typeof(long));
+                dt.Columns.Add("cxkglx", typeof(long));
+                DataTable dtYC = new DataTable();
+                dtYC.Columns.Add("xl_oid", typeof(long));
+                dtYC.Columns.Add("cxkg", typeof(long));
+                dtYC.Columns.Add("cxkglx", typeof(long));
+                dtYC.Columns.Add("mx_id", typeof(long));
+                List<object> listOid = new List<object>();
+                DeviceInfo devInfo;
+                long xl_oid = 0;
+                long cxkglx = 0;
+                bool status = true;
+                PGClass.SaveLogInfo(new List<object[]>() { new object[] { task_id, "准备拓扑查询数据以及母线数据开始" } }, GhdwConn);
+                DataTable dtpara_Sub = dtpara_Feeder.Copy();
+                List<string> cxkg_lx = new List<string>();
+                for (int i = 0; i < dtpara_Sub.Rows.Count; i++)
+                {
+                    cxkg_lx.Add(dtpara_Sub.Rows[i]["xl_cxkg"].ToString() + dtpara_Sub.Rows[i]["typeid"]);
+                }
+                int totalCount = dtpara_Sub.Rows.Count;
+                decimal count = Math.Ceiling((decimal)(totalCount / 3));
+                List<Task<List<DataTable>>> list = new List<Task<List<DataTable>>>();
+                for (int i = 0; i < 3; i++)
+                {
+                    DataTable dt1 = dtpara_Sub.Clone();
+                    for (int j = 0; j < totalCount; j++)
+                    {
+                        if (j >= count * i && j < count * (i + 1))
+                        {
+                            dt1.Rows.Add(dtpara_Sub.Rows[j].ItemArray);
+                        }
+                    }
+                    Task<List<DataTable>> t1 = new Task<List<DataTable>>(() =>
+                {
+                    return QueryMiddlePara(dt1, cxkg_lx);
+                });
+                    t1.Start();
+                    list.Add(t1);
+                }
+                Task.WaitAll(list.ToArray());
+                for (int i = 0; i < list.Count; i++)
+                {
+                    dt.Merge(list[i].Result[0]);
+                    dtYC.Merge(list[i].Result[1]);
+                    list[i].Dispose();
+                }
+
+                //创建临时表 PG: topo_sb_line_oid
+                PG.PGClass.CreateTempTable(GhdwConn, ConfigClass.PG_CreateTempTable);
+                PG.PGClass.WriteToServer(dt, "topo_sb_line_oid", GhdwConn);
+                dt_pg_mxh = PGClass.QueryNpgDatabase(GhdwConn, string.Format(ConfigClass.Topo_QueryTotal,parameter), paramList);
+                dtErrXl = dtYC;
+                PGClass.SaveLogInfo(new List<object[]>() { new object[] { task_id, "拓扑查询数据以及母线数据结束，开始查询开关状态" } }, GhdwConn);
+
+                #region 释放资源
+                DataTableClass.Dispose(dt);
+                DataTableClass.Dispose(dtpara_Sub);
+                listOid.Clear();
+                cxkg_lx.Clear();
+                #endregion
+
+
+
+            }
+            catch (Exception ex)
+            {
+                PGClass.SaveLogInfo(new List<object[]>() { new object[] { task_id, "异常：" + ex.Message + ex.StackTrace } }, GhdwConn);
+                isSuccess = false;
+                //throw new Exception(ex.StackTrace + Environment.NewLine + ex.Message);
+            }
+            finally
+            {
+                //编写异常信息
+                try
+                {
+                    if (GhdwConn != null)
+                    {
+                        GhdwConn.Close();
+                        GhdwConn.Dispose();
+                    }
+                }
+
+                catch (Exception e) { throw new Exception(e.StackTrace + e.Message); }
+            }
+        }
+
+        private List<DataTable> QueryMiddlePara(DataTable dt1, List<string> cxkg_lx)
+        {
+            List<DataTable> list = new List<DataTable>();
+            DataTable dt = new DataTable();
+            dt.Columns.Add("oid", typeof(long));
+            dt.Columns.Add("typeid", typeof(long));
+            dt.Columns.Add("cxkg", typeof(long));
+            dt.Columns.Add("cxkglx", typeof(long));
+            DataTable dtYC = new DataTable();
+            dtYC.Columns.Add("xl_oid", typeof(long));
+            dtYC.Columns.Add("cxkg", typeof(long));
+            dtYC.Columns.Add("cxkglx", typeof(long));
+            dtYC.Columns.Add("mx_id", typeof(long));
+            List<object> listOid = new List<object>();
+            DeviceInfo devInfo;
+            long xl_oid = 0;
+            long cxkglx = 0;
+            bool status = true;
+            foreach (DataRow drpara in dt1.Rows)
+            {
+                try
+                {
+                    if (drpara["xl_cxkg"] == DBNull.Value || drpara["xl_cxkglx"] == DBNull.Value || drpara["typeid"] == DBNull.Value) continue;
+                    if (listOid.Contains(drpara["xl_cxkg"])) continue;
+                    listOid.Add(drpara["xl_cxkg"]);
+                    devInfo = new DeviceInfo();
+                    devInfo.typeid = Convert.ToInt64(drpara["typeid"] == DBNull.Value ? "0" : drpara["typeid"].ToString());
+                    devInfo.oid = Convert.ToInt64(drpara["xl_cxkg"] == DBNull.Value ? "0" : drpara["xl_cxkg"].ToString());
+                    xl_oid = Convert.ToInt64(drpara["xl_oid"] == DBNull.Value ? "0" : drpara["xl_oid"].ToString());
+                    cxkglx = Convert.ToInt64(drpara["xl_cxkglx"] == DBNull.Value ? "0" : drpara["xl_cxkglx"].ToString());
+                    ParaInfo paraInfo = new ParaInfo();
+                    paraInfo.equip = new List<DeviceInfo>() { devInfo };
+                    string url = ConfigClass.ServerDataIp + JsonConvert.SerializeObject(paraInfo) + ConfigClass.TopoQueryCondition;
+                    var client = new RestClient(url);
+                    client.Timeout = 600000;
+                    client.ThrowOnAnyError = true;
+                    var request = new RestRequest();
+                    request.Timeout = 600000;
+                    RestResponse response = (RestResponse)client.Execute(request);
+                    if (response.Content == null) continue;
+                    ResultValueInfo resInfo = null;
+                    try
+                    {
+                        resInfo = JsonConvert.DeserializeObject<ResultValueInfo>(response.Content);
+                    }
+                    catch
+                    {
+                        PGClass.SaveLogInfo(new List<object[]>() { new object[] { task_id, "GetMiddlePara拓扑接口查询异常，url：" + url } });
+                        if (status) isSuccess = false;
+                        status = false;
+                    }
+                    bool isError = false;
+                    long mx_id = 0;
+                    long Errcxkg = 0;
+                    if (resInfo.stopequips != null)
+                    {
+                        foreach (DeviceInfo item in resInfo.stopequips)
+                        {
+                            if (item.oid == 0 || item.typeid == 0)
+                                continue;
+                            if (item.oid != devInfo.oid || item.typeid != devInfo.typeid)
+                            {
+                                if (cxkg_lx.Contains(item.oid + "" + item.typeid))
+                                {
+                                    isError = true;
+                                    Errcxkg = item.oid;
+                                }
+                            }
+                            if (item.typeid == 311000)
+                            {
+                                mx_id = item.oid;
+                            }
+                        }
+                        if (isError)
+                        {
+                            if (mx_id > 0)
+                                dtYC.Rows.Add(new object[] { xl_oid, devInfo.oid, devInfo.typeid, mx_id });
+                            else
+                            {
+                                dtYC.Rows.Add(new object[] { xl_oid, devInfo.oid, devInfo.typeid, Errcxkg });
+                            }
+                            foreach (DeviceInfo item in resInfo.stopequips)
+                            {
+                                if (item.oid == 0 || item.typeid == 0)
+                                    continue;
+                                dt.Rows.Add(new object[] { item.oid, item.typeid, devInfo.oid, devInfo.typeid });
+                            }
+                        }
+                        else
+                        {
+                            if (mx_id > 0)
+                                dt.Rows.Add(new object[] { mx_id, 311000, devInfo.oid, devInfo.typeid });
+                        }
+                    }
+                    if (isError)
+                    {
+                        if (resInfo.lastequips != null)
+                        {
+                            foreach (DeviceInfo item in resInfo.lastequips)
+                            {
+                                if (item.oid == 0 || item.typeid == 0)
+                                    continue;
+                                dt.Rows.Add(new object[] { item.oid, item.typeid, devInfo.oid, devInfo.typeid });
+                            }
+                        }
+                        if (resInfo.otherequips != null)
+                        {
+                            foreach (DeviceInfo item in resInfo.otherequips)
+                            {
+                                if (item.oid == 0 || item.typeid == 0)
+                                    continue;
+                                dt.Rows.Add(new object[] { item.oid, item.typeid, devInfo.oid, devInfo.typeid });
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    PGClass.SaveLogInfo(new List<object[]>() { new object[] { task_id, "GetMiddlePara异常：" + ex.Message + ex.StackTrace } });
+                }
+            }
+            list.Add(dt);
+            list.Add(dtYC);
+            return list;
+        }
+
+        public Dictionary<int, DataTable> GetData(DataTable dtResult_Sub, DataTable dt_pg_mxh, DataTable dtTempt, ref Dictionary<long, List<long>> listTL, Dictionary<long, List<long>> cxkg_mx_oids, ref bool isSuccess1)
+        {
+            DateTime _starTime = DateTime.Now;
+            TimeSpan timeSpan = TimeSpan.Zero;
+            Dictionary<int, DataTable> topodata = new Dictionary<int, DataTable>();
+            Npgsql.NpgsqlConnection GhdwConn = null;
+            Npgsql.NpgsqlConnection conn = null;
+            OracleConnection oracleConn = null;
+            DataTable dtErr = DataTableClass.CreateErrFeederTable();
+            try
+            {
+                DataTable dt = new DataTable();
+                #region 数据库启动连接 
+                PGGhdwConn pggh = new PGGhdwConn();
+                GhdwConn = pggh.conn;
+                PGConn pG = new PGConn();
+                conn = pG.conn;
+                OracleConn oracle = new OracleConn();
+                oracleConn = oracle.conn;
+                #endregion
+                #region 创建临时表 
+                //创建临时表 PG: topo_sb_line_oid
+                PGClass.CreateTempTable(GhdwConn, ConfigClass.PG_CreateTempTable);
+                //创建临时表 PG: topo_pdss
+                // PG.PGClass.CreateTempTable(GhdwConn, ConfigClass.PG_CreateTempTablePdss);
+                //创建临时表Oracle: topo_sb_line_sbid
+                OracleClass.CreateTempTable(oracleConn);
+                #endregion 
+                #region 拓扑接口 
+                _starTime = DateTime.Now;
+                string kgztSql = GetKGZTSql(dtTempt);
+                if (!string.IsNullOrEmpty(kgztSql))
+                {
+                    DataTable dtKgzt = PGClass.QueryNpgDatabase(GhdwConn, kgztSql, paramObjList);
+                    PGClass.SaveLogInfo(new List<object[]>() { new object[] { task_id, "查询开关状态结束，获取接口数据开始" } }, GhdwConn);
+                    dtKgzt = DataTableClass.Distinct(dtKgzt, "oid", "sbzlx");
+                    dtTempt = DataTableClass.OperateLeftJoin(dtTempt, dtKgzt, new List<string>() { "xl_cxkg", "xl_cxkglx" }, new List<string>() { "oid", "sbzlx" });//拼接  
+                    for (int i = 0; i < dtTempt.Rows.Count; i++)
+                    {
+                        if (dtTempt.Rows[i]["kgzt"] == DBNull.Value)
+                        {
+                            dtTempt.Rows[i]["kgzt"] = 1;
+                        }
+                    }
+                    dtTempt.DefaultView.Sort = "kgzt desc";
+                    dtTempt = dtTempt.DefaultView.ToTable();
+                }
+                dt = GetDataTableByPara1(dtTempt, ref dtErr, GhdwConn, ref listTL, cxkg_mx_oids);
+                timeSpan = DateTime.Now - _starTime;
+                PGClass.SaveLogInfo(new List<object[]>() { new object[] { task_id, string.Format("获取接口数据，共耗时{0}分{1}秒{2}毫秒,数量为:{3}，开始查询馈线Oracle", timeSpan.Minutes, timeSpan.Seconds, timeSpan.Milliseconds, dt.Rows.Count) } }, GhdwConn);
+                if (dt.Rows.Count == 0)
+                {
+                    PGClass.SaveLogInfo(new List<object[]>() { new object[] { task_id, "馈线数量为" + dtTempt.Rows.Count } }, GhdwConn);
+                    isSuccess = false;
+                    return topodata;
+                }
+                dt = DataTableClass.OperateLeftJoin(dt, dtTempt.DefaultView.ToTable(false, new string[] { "typeid", "xl_cxkg", "sbdydj", "xl_oid" }), new List<string>() { "cxkg", "cxkglx" }, new List<string>() { "xl_cxkg", "typeid" }).DefaultView.ToTable(false, new string[] { "oid", "equips", "typeid", "cxkg", "cxkglx", "sbdydj", "xl_oid" });
+                dt.Columns["sbdydj"].ColumnName = "dydj";
+                PG.PGClass.CreateTempTable(GhdwConn, ConfigClass.PG_ClearTempTable);
+                //将接口返回的数据插入临时表 
+                PG.PGClass.WriteToServer(dt, "topo_sb_line_oid", GhdwConn);
+                //PG.PGClass.WriteToServer(dt, "topo_zyxl.topo_sb_line_oid", GhdwConn);
+                //PGClass.ExecuteNoneQuery(ConfigClass.PG_Delete_InvalidData, GhdwConn);
+                #endregion
+                #region 馈线  
+                _starTime = DateTime.Now;
+                // DataTable dt_pg_mxh = PG.PGClass.QueryNpgDatabase(GhdwConn, string.Format(ConfigClass.PG_Query_CXMXH, parameter));//查询母线号
+                dt_pg_mxh = DataTableClass.Distinct(dt_pg_mxh, "cxkg", "cxkglx");
+                dt_pg_mxh = GetTableByCondition(dt_pg_mxh, "typeid=311000");
+                dt_pg_mxh.Columns["oid"].ColumnName = "mx_id";
+                dt_pg_mxh.Columns.Remove("typeid");
+                OracleClass.CreateTempTable_1(oracleConn);
+                OracleClass.ExecuteNoneQuery("truncate table temp_topo_sb_line_sbid", oracleConn);
+                Oracle.OracleClass.ContrastTableAndWrite(dtTempt, oracleConn, ConfigClass.dicContrastOracleTempTable_1, "temp_topo_sb_line_sbid");
+                //Oracle.OracleClass.ContrastTableAndWrite(dtTempt, oracleConn, ConfigClass.dicContrastOracleTempTable, "topo_sb_line_sbid"); 
+                // Oracle.OracleClass.ContrastTableAndWrite(dtTempt, oracleConn, ConfigClass.dicContrastOracleTempTable_1, "temp_topo_sb_line_sbid_11");
+
+                DataTable dt_Oracle_Feeder = Oracle.OracleClass.QueryOracleDatabase(ConfigClass.Oracle_QueryFeederSql, new List<object>() { dept_code, dept_code, loadTime }, oracleConn);//查询oracle馈线  
+                PGClass.SaveLogInfo(new List<object[]>() { new object[] { task_id, "查询oracle馈线结束,开始查询线段信息" } }, GhdwConn);                                                                                  //DataTable dtResult_Feeder1 = DataTableClass.JoinTable(dtTempt, dt_pg_mxh, new List<string>() { "xl_cxkg", "xl_cxkglx" }, new List<string>() { "cxkg", "cxkglx" });//拼接  
+                DataTable dtResult_Feeder = DataTableClass.OperateLeftJoin(dtTempt, dt_pg_mxh, new List<string>() { "xl_cxkg", "typeid" }, new List<string>() { "cxkg", "cxkglx" });//拼接  
+                DataTable dtResult_Feeder_1 = dtResult_Feeder.Clone();
+                DataTable dtResult_Feeder_2 = dtResult_Feeder.Clone();
+                //测试
+                //BuildTestData(ref dt_Oracle_Feeder, dtResult_Feeder);
+                List<string> liStr = GetNoInfoIdsStr(dtResult_Feeder, dt_Oracle_Feeder, dwxh, ref dtResult_Feeder_1, ref dtResult_Feeder_2);
+                bool isQueryFeeder = false;
+                if (!string.IsNullOrEmpty(liStr[0]) && !string.IsNullOrEmpty(liStr[1]))
+                {
+                    DataTable dt_f = PGClass.QueryNpgDatabase(GhdwConn, ConfigClass.PG_Query_FeederSsdkx, new List<object>() { parameter, liStr[0], liStr[1] });//ssdkx,sbid
+                    dt_f = DataTableClass.Distinct(dt_f, "ssdkx");
+                    List<string> oidStr = GetInfoIdsStr(dt_f);
+                    if (!string.IsNullOrEmpty(oidStr[0]))
+                    {
+                        try
+                        {
+                            string zcdw = "";
+                            PGClass.SaveLogInfo(new List<object[]>() { new object[] { task_id, "Oracle_Query_Dept_code:" + ConfigClass.Oracle_Query_Dept_code+ dept_code+ oidStr[0]} }, GhdwConn);
+                            DataTable dt_or = OracleClass.QueryOracleDatabase(ConfigClass.Oracle_Query_Dept_code, new List<object>() { dept_code, oidStr[0] }, oracleConn);
+                            if (dt_or.Rows.Count > 0)
+                            {
+                                zcdw = dt_or.Rows[0][0].ToString();
+                            }
+                            //else
+                            //{
+                            //    zcdw = dwxh;
+                            //}
+                            PGClass.SaveLogInfo(new List<object[]>() { new object[] { task_id, "zcdw:" + zcdw } }, GhdwConn);
+                            if (!string.IsNullOrEmpty(zcdw))
+                            {
+                                PGClass.SaveLogInfo(new List<object[]>() { new object[] { task_id, "Oracle_Query_Feeder_1:" + ConfigClass.Oracle_Query_Feeder_1+ zcdw + dwxh + dept_code + oidStr[1]} }, GhdwConn);
+                                OracleClass.ExecuteNoneQuery(ConfigClass.Oracle_ClearTempTable, oracleConn); //清空oracle临时表
+                                DataTable dt_f_Clone = GetTableByCondition(dt_f, "type=0").Copy();
+                                dt_f_Clone.Columns.Remove("type");
+                                dt_f_Clone.Columns.Remove("ssdkx");
+                                OracleClass.WriteToServer(dt_f_Clone, "topo_sb_line_sbid", oracleConn);
+                                DataTable dt_Oracle_Feeder_1 = OracleClass.QueryOracleDatabase(ConfigClass.Oracle_Query_Feeder_1, new List<object>() { zcdw, dwxh, dept_code }, oracleConn);//obj_id (ssdkx) 
+                                //测试
+                                //BuildTestData1(ref dt_Oracle_Feeder_1, GetTableByCondition(dt_f, "type=0")); 
+                                dt_Oracle_Feeder_1 = DataTableClass.OperateLeftJoin(dt_Oracle_Feeder_1, GetTableByCondition(dt_f, "type=0"), new List<string>() { "dwzy_id" }, new List<string>() { "sbid" });//拼接   ---ssdkx,sbid,type 
+                                dt_Oracle_Feeder_1 = DataTableClass.Distinct(dt_Oracle_Feeder_1, "ssdkx");
+                                PGClass.SaveLogInfo(new List<object[]>() { new object[] { task_id, "dt_Oracle_Feeder_1:" + dt_Oracle_Feeder_1.Rows.Count } }, GhdwConn);
+                                if (dt_Oracle_Feeder_1.Rows.Count > 0)
+                                {
+                                    dtResult_Feeder_1 = DataTableClass.OperateLeftJoin(dtResult_Feeder_1, dt_Oracle_Feeder_1, new List<string>() { "xl_oid" }, new List<string>() { "ssdkx" }); //拼接 
+                                    DataTable dt_Oracle_Feeder_2 = RemoveOracleFeeder(dt_Oracle_Feeder, dtResult_Feeder_2);
+                                    dtResult_Feeder_2 = DataTableClass.OperateLeftJoin(dtResult_Feeder_2, dt_Oracle_Feeder_2, new List<string>() { "sbid" }, new List<string>() { "ssdkx" }); //拼接
+                                    dtResult_Feeder_2.Merge(dtResult_Feeder_1, false, MissingSchemaAction.Ignore);
+                                    dtResult_Feeder_2 = DataTableClass.Distinct(dtResult_Feeder_2, "xl_oid");
+                                    isQueryFeeder = true;
+                                }
+                            }
+                        }
+
+                        catch (Exception ex)
+                        {
+                            PGClass.SaveLogInfo(new List<object[]>() { new object[] { task_id, "异常:" + ex.Message + ex.StackTrace } }, GhdwConn);
+                        }
+                    }
+                }
+                PGClass.SaveLogInfo(new List<object[]>() { new object[] { task_id, "isQueryFeeder:" + isQueryFeeder } }, GhdwConn);
+                if (isQueryFeeder)
+                {
+                    dtResult_Feeder = dtResult_Feeder_2;
+                }
+                else
+                {
+                    dt_Oracle_Feeder = TableConvertDecimalToLong(dt_Oracle_Feeder, "oid");
+
+                    dtResult_Feeder = DataTableClass.OperateLeftJoin(dtResult_Feeder, dt_Oracle_Feeder, new List<string>() { "xl_oid" }, new List<string>() { "oid" }); //拼接
+                }
+                //没有查到的xl_oid 执行sql1 PG_Query_FeederSsdkx（线路表） oid---ssdkx    
+                //线路表的sbid 查oracle 档案信息   sbid ---dwzy_id
+
+                listTLStatus = GetTlStatus(dtResult_Feeder, listTL);
+                DataTable dtErrTemp = DataTableClass.CreateErrFeederTempTable();
+                for (int i = 0; i < dtResult_Feeder.Rows.Count; i++)
+                {
+                    if (dtErr.Select("oid=" + dtResult_Feeder.Rows[i]["xl_oid"]).Length > 0)
+                    {
+                        dtErrTemp.Rows.Add(new object[] { dtResult_Feeder.Rows[i]["xl_oid"], dtResult_Feeder.Rows[i]["xlsx"] == DBNull.Value ? 1 : Convert.ToInt32(dtResult_Feeder.Rows[i]["xlsx"]) });
+                        dtResult_Feeder.Rows.Remove(dtResult_Feeder.Rows[i]);
+                        i--;
+                    }
+                }
+                dtErr = DataTableClass.OperateLeftJoin(dtErr, dtErrTemp, new List<string>() { "oid" }, new List<string>() { "oid" }); //拼接  
+                #endregion 
+                #region 线段信息    
+                DataTable dtZWSB = PGClass.QueryNpgDatabase(GhdwConn, string.Format(ConfigClass.PG_Query_ZWSB,parameter), paramList);
+                OracleClass.ExecuteNoneQuery(ConfigClass.Oracle_ClearTempTable, oracleConn); //清空oracle临时表将dt_PG_CXXDXX插入临时表中（devicetype sbid）
+                OracleClass.ContrastTableAndWrite(GetTableByCondition(dtZWSB, "type='中压电缆'"), oracleConn, ConfigClass.dicContrastOracleTempTableXDXX, "topo_sb_line_sbid");
+                DataTable dt_Oracle_CXXDXX = Oracle.OracleClass.QueryOracleDatabase(ConfigClass.Oracle_Query_XDDA, new List<object>() { dept_code }, oracleConn);
+                // OracleClass.ExecuteNoneQuery(ConfigClass.Oracle_ClearTempTable, oracleConn); //清空oracle临时表将dt_PG_CXXDXX插入临时表中（devicetype sbid） 
+                OracleClass.ContrastTableAndWrite(DataTableClass.Distinct(GetTableByCondition(dtZWSB, "type='中压架空'"), "sbid"), oracleConn, ConfigClass.dicContrastOracleTempTableXDXX, "topo_sb_line_sbid");
+                DataTable dt_Oracle_CXXDXX_1 = Oracle.OracleClass.QueryOracleDatabase(ConfigClass.Oracle_Query_XDDA_1, new List<object>() { dept_code }, oracleConn);
+                dt_Oracle_CXXDXX.Merge(dt_Oracle_CXXDXX_1, false, MissingSchemaAction.Ignore);
+                DataTable dtResult_XD = DataTableClass.OperateLeftJoin(GetTableByCondition(dtZWSB, "devicetype=2"), dt_Oracle_CXXDXX, new List<string>() { "sbid" }, new List<string>() { "DWZY_ID" });//拼接 
+                UpdateDXLength(GhdwConn, ref dtResult_XD, dtResult_Feeder);
+                PGClass.SaveLogInfo(new List<object[]>() { new object[] { task_id, "线段查询结束，开始查询配电变压器" } }, GhdwConn);
+                DataTable dtFeederLoss = DataTableClass.CreateFeederLossTable();
+                foreach (DataRow item in dtResult_Feeder.Rows)
+                {
+                    int oriCount = dtResult_XD.Select("xl_oid=" + item["xl_oid"]).Length;
+                    int actCount = dtResult_XD.Select("xl_oid=" + item["xl_oid"] + " and DWZY_ID is not null").Length;
+                    dtFeederLoss.Rows.Add(item["xl_oid"], "合计：" + oriCount + "条，存在档案信息：" + actCount + "条");
+                }
+
+                //查询Oracle网格单元 （需要替换dwxh，现在是固定值）
+                //DataTable wgdytable = GetGridCell(oracleConn, conn, GhdwConn);
+
+                //DataTable dt_grid = GetGridBounder(GhdwConn);
+                #endregion
+                #region 配电设施  
+                DataTable dt_PG_ZNSB = PG.PGClass.QueryNpgDatabase(GhdwConn, string.Format(ConfigClass.PG_Query_ZNSB,parameter), paramList);//配电变压器 2、5、7、8
+                DataTable dt_PG_PDBYQ = GetTableByCondition(dt_PG_ZNSB, "devicetype=5");//5
+
+                dt_PG_PDBYQ.Columns.Add("blackname", typeof(string));
+                dt_PG_PDBYQ.Columns.Add("devicename", typeof(string));
+                PGClass.SaveLogInfo(new List<object[]>() { new object[] { task_id, "查询配电变压器结束，开始查询柱上变压器" } }, GhdwConn);
+                //DataTable dt_PG_ZSBYQ = PG.PGClass.QueryNpgDatabase(GhdwConn, string.Format(ConfigClass.PG_Query_ZSBYQ, parameter));//柱上变压器
+
+
+                dt_PG_PDBYQ.Merge(GetTableByCondition(dtZWSB, "devicetype=5"), false, MissingSchemaAction.Ignore);
+                dtResult_XD.Merge(GetTableByCondition(dt_PG_ZNSB, "devicetype=2 and end_conn>0"), false, MissingSchemaAction.Ignore);
+                PGClass.SaveLogInfo(new List<object[]>() { new object[] { task_id, "查询柱上变压器结束，开始查询Oracle配电" } }, GhdwConn);
+                //PG.PGClass.WriteToServer(dt_PG_PDBYQ, "topo_pdss", GhdwConn);
+                OracleClass.ExecuteNoneQuery(ConfigClass.Oracle_ClearTempTable, oracleConn); //清空oracle临时表将dt_PG_CXXDXX插入临时表中（devicetype sbid）
+                OracleClass.ContrastTableAndWrite(dt_PG_PDBYQ, oracleConn, ConfigClass.dicContrastOracleTempTableXDXX, "topo_sb_line_sbid");
+                DataTable dt_Oracle_Trans = Oracle.OracleClass.QueryOracleDatabase(ConfigClass.Oracle_Query_Trans, new List<object>() { dept_code, dept_code }, oracleConn);
+                DataTable dtResult_Trans = DataTableClass.OperateLeftJoin(dt_PG_PDBYQ, dt_Oracle_Trans, new List<string>() { "sbid" }, new List<string>() { "dwzy_id" });
+                DataTable dtTransLoss = DataTableClass.CreateTransLossTable();
+                foreach (DataRow item in dtResult_Feeder.Rows)
+                {
+                    int oriCount = dtResult_Trans.Select("xl_oid=" + item["xl_oid"]).Length;
+                    int actCount = dtResult_Trans.Select("xl_oid=" + item["xl_oid"] + " and DWZY_ID is not null").Length;
+                    dtTransLoss.Rows.Add(item["xl_oid"], "合计：" + oriCount + "条，存在档案信息：" + actCount + "条");
+                }
+                #endregion
+                PGClass.SaveLogInfo(new List<object[]>() { new object[] { task_id, "查询配电结束，开始ZWZSGLKG" } }, GhdwConn);
+                DataTable dt_PG_ZWZSGLKG = PG.PGClass.QueryNpgDatabase(GhdwConn, string.Format(ConfigClass.PG_Query_ZWZSGLKG, parameter), paramList);//柱上隔离开关 
+                PGClass.SaveLogInfo(new List<object[]>() { new object[] { task_id, "ZWZSGLKG结束，开始ZWZSRDQ" } }, GhdwConn);
+                DataTable dt_PG_ZWZSRDQ = PG.PGClass.QueryNpgDatabase(GhdwConn, string.Format(ConfigClass.PG_Query_ZWZSRDQ, parameter), paramList);//柱上熔断器  
+                DataTable dt_PG_DRQ = PG.PGClass.QueryNpgDatabase(GhdwConn, string.Format(ConfigClass.PG_Query_DRQ, parameter), paramList);//柱上熔断器   
+                PGClass.SaveLogInfo(new List<object[]>() { new object[] { task_id, "ZWZSRDQ结束，开始ZNLJX" } }, GhdwConn);
+                DataTable dt_PG_ZNLJX = PG.PGClass.QueryNpgDatabase(GhdwConn, string.Format(ConfigClass.PG_Query_ZNLJX, parameter), paramList);//站内连接线 360000  
+                PGClass.SaveLogInfo(new List<object[]>() { new object[] { task_id, "ZNLJX结束，开始ZNGLKG" } }, GhdwConn);
+                DataTable dt_PG_ZNGLKG = PG.PGClass.QueryNpgDatabase(GhdwConn, string.Format(ConfigClass.PG_Query_ZNGLKG, parameter), paramList);//站内隔离开关  
+                PGClass.SaveLogInfo(new List<object[]>() { new object[] { task_id, "ZNGLKG结束，开始ZNRDQ" } }, GhdwConn);
+                DataTable dt_PG_ZNRDQ = PG.PGClass.QueryNpgDatabase(GhdwConn, string.Format(ConfigClass.PG_Query_ZNRDQ, parameter), paramList);//站内熔断器 
+                PGClass.SaveLogInfo(new List<object[]>() { new object[] { task_id, "ZNRDQ结束，开始ZNDLQ" } }, GhdwConn);
+
+                ////1
+                //DataTable dt_PG_ZNDLQ = PG.PGClass.QueryNpgDatabase(GhdwConn, string.Format(ConfigClass.PG_Query_ZNDLQ, parameter));//站内断路器  
+                //PGClass.SaveLogInfo(new List<object[]>() { new object[] { task_id, "ZNDLQ结束，开始ZNFHKG" } }, GhdwConn);
+
+
+                ////2
+                //DataTable dt_PG_ZNFHKG = PG.PGClass.QueryNpgDatabase(GhdwConn, string.Format(ConfigClass.PG_Query_ZNFHKG, parameter));//站内负荷开关  
+                //PGClass.SaveLogInfo(new List<object[]>() { new object[] { task_id, "ZNFHKG结束，开始ZNDL" } }, GhdwConn);
+
+
+
+
+                DataTable dt_PG_ZNDL = PG.PGClass.QueryNpgDatabase(GhdwConn, string.Format(ConfigClass.PG_Query_ZNDL, parameter), paramList);//站内电缆  
+                PGClass.SaveLogInfo(new List<object[]>() { new object[] { task_id, "ZNDL结束，开始ZNQTSB" } }, GhdwConn);
+                DataTable dt_PG_ZNQTSB = PG.PGClass.QueryNpgDatabase(GhdwConn, string.Format(ConfigClass.PG_Query_ZNQTSB, parameter), paramList);//站内其他设备  
+                dtResult_XD.Merge(GetTableByCondition(dt_PG_ZWZSGLKG, "end_conn>0"), false, MissingSchemaAction.Ignore);
+                dtResult_XD.Merge(GetTableByCondition(dt_PG_ZWZSRDQ, "end_conn>0"), false, MissingSchemaAction.Ignore);
+                dtResult_XD.Merge(GetTableByCondition(dt_PG_DRQ, "end_conn>0"), false, MissingSchemaAction.Ignore);
+                dtResult_XD.Merge(GetTableByCondition(dt_PG_ZNLJX, "end_conn>0"), false, MissingSchemaAction.Ignore);
+                dtResult_XD.Merge(GetTableByCondition(dt_PG_ZNGLKG, "end_conn>0"), false, MissingSchemaAction.Ignore);
+                dtResult_XD.Merge(GetTableByCondition(dt_PG_ZNRDQ, "end_conn>0"), false, MissingSchemaAction.Ignore);
+                //dtResult_XD.Merge(GetTableByCondition(dt_PG_ZNDLQ, "devicetype=2"), false, MissingSchemaAction.Ignore);
+                //dtResult_XD.Merge(GetTableByCondition(dt_PG_ZNFHKG, "devicetype=2"), false, MissingSchemaAction.Ignore);
+                dtResult_XD.Merge(GetTableByCondition(dt_PG_ZNDL, "end_conn>0"), false, MissingSchemaAction.Ignore);
+                dtResult_XD.Merge(GetTableByCondition(dt_PG_ZNQTSB, "end_conn>0"), false, MissingSchemaAction.Ignore);
+                dtResult_XD.Columns.Add("ssdz", typeof(long));
+                DataTable dtTopoLoss = DataTableClass.CreateTopoLossTable();
+                //foreach (DataRow item in dtResult_Feeder2.Rows)
+                //{
+                //    StringBuilder sb = new StringBuilder();
+                //    //导线段101000
+                //    sb.Append("DXD导线段---TOPO:" + dt_1.Select("xl_oid=" + item["xl_oid"] + " and typeid=101000").Length);
+                //    sb.Append("  DB:" + dtResult_XD.Select("xl_oid=" + item["xl_oid"] + " and typeid=101000").Length);
+                //    //DLD电缆段 201000
+                //    sb.Append(Environment.NewLine + "DLD电缆段---TOPO:" + dt_1.Select("xl_oid=" + item["xl_oid"] + " and typeid=201000").Length);
+                //    sb.Append("  DB:" + dtResult_XD.Select("xl_oid=" + item["xl_oid"] + " and typeid=201000").Length);
+                //    //ZWCLJX站外超连接线 140000
+                //    sb.Append(Environment.NewLine + "ZWCLJX站外超连接线---TOPO:" + dt_1.Select("xl_oid=" + item["xl_oid"] + " and typeid=140000").Length);
+                //    sb.Append("  DB:" + dtResult_XD.Select("xl_oid=" + item["xl_oid"] + " and typeid=140000").Length);
+                //    //ZWLJS站外连接线 130000
+                //    sb.Append(Environment.NewLine + "ZWLJS站外连接线---TOPO:" + dt_1.Select("xl_oid=" + item["xl_oid"] + " and typeid=130000").Length);
+                //    sb.Append("  DB:" + dtResult_XD.Select("xl_oid=" + item["xl_oid"] + " and typeid=130000").Length);
+                //    //ZSGLKG柱上隔离开关 113000
+                //    sb.Append(Environment.NewLine + "ZSGLKG柱上隔离开关---TOPO:" + dt_1.Select("xl_oid=" + item["xl_oid"] + " and typeid=113000").Length);
+                //    sb.Append("  DB:" + dt_PG_ZWZSGLKG.Select("xl_oid=" + item["xl_oid"]).Length);
+                //    //ZSRDQ柱上熔断器 115000
+                //    sb.Append(Environment.NewLine + "ZSRDQ柱上熔断器---TOPO:" + dt_1.Select("xl_oid=" + item["xl_oid"] + " and typeid=115000").Length);
+                //    sb.Append("  DB:" + dt_PG_ZWZSRDQ.Select("xl_oid=" + item["xl_oid"] + " and typeid=115000").Length);
+                //    //ZNLJX站内连接线 360000
+                //    sb.Append(Environment.NewLine + "ZNLJX站内连接线---TOPO:" + dt_1.Select("xl_oid=" + item["xl_oid"] + " and typeid=360000").Length);
+                //    sb.Append("  DB:" + dt_PG_ZNLJX.Select("xl_oid=" + item["xl_oid"] + " and typeid=360000").Length);
+                //    //ZNGLKG站内隔离开关 306000
+                //    sb.Append(Environment.NewLine + "ZNGLKG站内隔离开关---TOPO:" + dt_1.Select("xl_oid=" + item["xl_oid"] + " and typeid=306000").Length);
+                //    sb.Append("  DB:" + dt_PG_ZNGLKG.Select("xl_oid=" + item["xl_oid"] + " and typeid=306000").Length);
+                //    //ZNRDQ站内熔断器 309000
+                //    sb.Append(Environment.NewLine + "ZNRDQ站内熔断器---TOPO:" + dt_1.Select("xl_oid=" + item["xl_oid"] + " and typeid=309000").Length);
+                //    sb.Append("  DB:" + dt_PG_ZNRDQ.Select("xl_oid=" + item["xl_oid"] + " and typeid=309000").Length);
+                //    //ZNDLQ站内断路器 305000
+                //    sb.Append(Environment.NewLine + "ZNDLQ站内断路器---TOPO:" + dt_1.Select("xl_oid=" + item["xl_oid"] + " and typeid=305000").Length);
+                //    sb.Append("  DB:" + dt_PG_ZNDLQ.Select("xl_oid=" + item["xl_oid"] + " and typeid=305000").Length);
+                //    //ZNDL站内电缆 322000
+                //    sb.Append(Environment.NewLine + "DXD导线段---TOPO:" + dt_1.Select("xl_oid=" + item["xl_oid"] + " and typeid=322000").Length);
+                //    sb.Append("  DB:" + dt_PG_ZNDL.Select("xl_oid=" + item["xl_oid"] + " and typeid=322000").Length);
+                //    //ZNFHKG站内负荷开关 307000
+                //    sb.Append(Environment.NewLine + "ZNFHKG站内负荷开关---TOPO:" + dt_1.Select("xl_oid=" + item["xl_oid"] + " and typeid=307000").Length);
+                //    sb.Append("  DB:" + dt_PG_ZNFHKG.Select("xl_oid=" + item["xl_oid"] + " and typeid=307000").Length);
+                //    //ZSBYQ柱上变压器 110000
+                //    sb.Append(Environment.NewLine + "ZSBYQ柱上变压器---TOPO:" + dt_1.Select("xl_oid=" + item["xl_oid"] + " and typeid=110000").Length);
+                //    sb.Append("  DB:" + dt_PG_ZSBYQ.Select("xl_oid=" + item["xl_oid"] + " and typeid=110000").Length);
+                //    //PDBYQ配电变压器 302000 
+                //    sb.Append(Environment.NewLine + "PDBYQ配电变压器---TOPO:" + dt_1.Select("xl_oid=" + item["xl_oid"] + " and typeid=302000").Length);
+                //    sb.Append("  DB:" + dt_PG_PDBYQ.Select("xl_oid=" + item["xl_oid"] + " and typeid=302000").Length);
+                //    //ZNDL站内其他 390000
+                //    sb.Append(Environment.NewLine + "ZNDL站内其他---TOPO:" + dt_1.Select("xl_oid=" + item["xl_oid"] + " and typeid=390000").Length);
+                //    sb.Append("  DB:" + dtResult_XD.Select("xl_oid=" + item["xl_oid"] + " and typeid=390000").Length);
+                //    dtTopoLoss.Rows.Add(item["xl_oid"], sb.ToString());
+                //}
+
+                DataTable dt_PG_ZNKG = dt_PG_ZNSB.Clone();
+                dt_PG_ZNKG.Columns.Add("devicename", typeof(string));
+                dt_PG_ZNKG.Columns.Add("blackname", typeof(string));
+                dt_PG_ZNKG.Merge(GetTableByCondition(dt_PG_ZNSB, "devicetype=7 or devicetype=8 "), false, MissingSchemaAction.Ignore);
+                dt_PG_ZNKG.Merge(GetTableByCondition(dt_PG_ZNSB, "devicetype=7 or devicetype=8 "), false, MissingSchemaAction.Ignore);
+                PGClass.SaveLogInfo(new List<object[]>() { new object[] { task_id, "dt_PG_ZNQTSB查询结束，开始查询开关设施" } }, GhdwConn);
+                #region 开关设施
+                //查出设备类型为4、5 的数据放入临时表
+                _starTime = DateTime.Now;
+                paramObjList.Clear();
+                foreach(object obj in paramList){
+                    paramObjList.Add(obj);
+                }
+                paramObjList.Add(dwxh);
+                DataTable dt_PG_Switch = PG.PGClass.QueryNpgDatabase(GhdwConn, string.Format(ConfigClass.PG_Query_Switch, parameter), paramObjList);
+                Oracle.OracleClass.ContrastTableAndWrite(GetTableByCondition(dt_PG_Switch, "devicetype=4"), oracleConn, ConfigClass.dicContrastOracleTempTableXDXX, "topo_sb_line_sbid");
+                DataTable dt_Oracle_Switch = Oracle.OracleClass.QueryOracleDatabase(ConfigClass.Oracle_Query_Switch, new List<object>() { dept_code, dept_code, dept_code }, oracleConn);
+                DataTable dataTable = GetTableByCondition(dtZWSB, "devicetype=3");
+                dataTable.Columns["oid"].ColumnName = "dm_id";
+                //将线段信息devicetype为3的和dt_PG_Switch合并
+                dt_PG_Switch.Merge(dataTable, false, MissingSchemaAction.Ignore);
+                dt_PG_Switch = DataTableClass.OperateLeftJoin(dt_PG_Switch, dt_Oracle_Switch, new List<string>() { "sbid" }, new List<string>() { "dwzy_id" }); //拼接 
+                List<string> listYHFJ = GetListYHFJ(dt_PG_Switch);
+                if (listYHFJ.Count > 0)
+                {
+                    for (int i = 0; i < dt_PG_ZNKG.Rows.Count; i++)
+                    {
+                        string ssdz = dt_PG_ZNKG.Rows[i]["ssdz"].ToString();
+                        if (listYHFJ.Contains(ssdz))
+                        {
+                            dt_PG_ZNKG.Rows.Remove(dt_PG_ZNKG.Rows[i]);
+                            i--;
+                        }
+                    }
+                }
+                PGClass.SaveLogInfo(new List<object[]>() { new object[] { task_id, "开关查询结束，开始查询配变负荷" } }, GhdwConn);
+                #endregion
+
+                #region 数据入库
+                ////配电设施数据入库 
+                ///
+                //PG.PGClass.ExecuteNoneQuery(string.Format(ConfigClass.PG_Delete_Sql, "topo_zyxl.topo_pdss", ConfigClass.dwxh, ConfigClass.year), GhdwConn);
+                //PG.PGClass.ExecuteNoneQuery(string.Format(ConfigClass.PG_Insert_Trans, parameter), GhdwConn);
+                //#region 数据拼接 数据入库
+                //Task.Run(() =>
+                //{
+                //    PG.PGConn pgcg = new PG.PGConn();
+                //    try
+                //    {
+                //        //变电站数据入库 
+                //        PG.PGClass.ExecuteNoneQuery(string.Format(ConfigClass.PG_Delete_Sql, "topo_zyxl.topo_bdz", ConfigClass.dwxh, ConfigClass.year), pgcg.conn);
+                //        PG.PGClass.ContrastTableAndWrite(dtResult_Sub, pgcg.conn, ConfigClass.dicContrastTopoBdz, "topo_zyxl.topo_bdz");
+                //        //中压线路数据入库 
+                //        PG.PGClass.ExecuteNoneQuery(string.Format(ConfigClass.PG_Delete_Sql, "topo_zyxl.topo_zyxl", ConfigClass.dwxh, ConfigClass.year), pgcg.conn);
+                //        PG.PGClass.ContrastTableAndWrite(dtResult_Feeder2, pgcg.conn, ConfigClass.dicContrastTopoZyxl, "topo_zyxl.topo_zyxl");
+                //        //开关设施数据入库 
+                //        PG.PGClass.ExecuteNoneQuery(string.Format(ConfigClass.PG_Delete_Sql, "topo_zyxl.topo_kgss", ConfigClass.dwxh, ConfigClass.year), pgcg.conn);
+                //        PG.PGClass.ContrastTableAndWrite(GetTableByCondition(dtResult_Switch_1, "rows=1 and (devicetype=3 or devicetype=4)"), pgcg.conn, ConfigClass.dicContrastTopoKgss, "topo_zyxl.topo_kgss");
+                //    }
+                //    catch (Exception ex)
+                //    {
+                //        throw new Exception(ex.StackTrace+ex.Message);
+                //    }
+                //    finally
+                //    {
+                //        pgcg.conn.Dispose();
+                //    }
+                //});
+                #endregion
+                DataTable dtTransLoad = DataTableClass.CreateTransLoadTable();
+                DataTable dt_check = DataTableClass.CreateTransLoadCheckTable();
+                if (callLoad == 1)
+                {
+                    PGClass.SaveLogInfo(new List<object[]>() { new object[] { task_id, "负荷地址：" + ConfigClass.LoadDataIp } }, GhdwConn);
+
+                    //测试
+                    //TestClass.CompletionTestData(ref dtResult_Feeder, ref dtResult_Trans);
+                    //配变负荷  单次调用方法
+                    GetLoadDataByTask(dtResult_Feeder, dtResult_Trans, dept_code, dept_code, ref dtTransLoad, task_id, taskCount, GhdwConn);
+                    //配变负荷 批量调用方法 
+                    // GetLoadData(dtResult_Feeder, dtResult_Trans, dept_code, dept_code, ref dtTransLoad, task_id, GhdwConn, dwxh, startTime);
+                    timeSpan = DateTime.Now - _starTime;
+                    PGClass.SaveLogInfo(new List<object[]>() { new object[] { task_id, string.Format("获取配电LOAD，共耗{3}时{0}分{1}秒{2}毫秒", timeSpan.Minutes, timeSpan.Seconds, timeSpan.Milliseconds, timeSpan.Hours) } }, GhdwConn);
+                }
+                //PGClass.ExecuteNoneQuery("delete from wjfx.t_tx_znyc_pdfh where  task_id='" + task_id + "'", GhdwConn);
+                //PGClass.WriteToServer(dtTransLoad, "wjfx.t_tx_znyc_pdfh", GhdwConn);
+                List<string> listCondition = new List<string>() { "oid", "sbzlx", "xl_oid" };
+                dtResult_Trans = DataTableClass.OperateLeftJoin(dtResult_Trans, dtTransLoad, listCondition, listCondition);
+                dtErr.Columns.Add("topo_check_info", typeof(string));
+                DataRow[] data2 = null;
+                for (int i = 0; i < dtErr.Rows.Count; i++)
+                {
+                    data2 = dtTopoLoss.Select("oid=" + dtErr.Rows[i]["oid"]);
+                    if (data2.Length > 0)
+                    {
+                        dtErr.Rows[i]["topo_check_info"] = data2[0]["topo_check_info"];
+                    }
+                    data2 = null;
+                }
+                dtErr = DataTableClass.Distinct(dtErr, "oid");//去重 
+                GetTransLoadCheckTable(dtResult_Trans, dtResult_Feeder, ref dt_check, task_id);
+                PGClass.SaveLogInfo(new List<object[]>() { new object[] { task_id, "配变dt_check：" + JsonConvert.SerializeObject(dt_check) } }, GhdwConn);
+                dtResult_Trans.Columns.Remove("end_conn");
+                dtResult_Feeder = DataTableClass.Distinct(dtResult_Feeder, "xl_cxkg", "xl_cxkglx");
+
+                //处理通路线段
+                //OperateXD(ref dtResult_XD,listTL,ref dt_PG_Switch,dtResult_Feeder);
+
+                topodata.Add(0, dtResult_Sub);//0:变电站 
+                topodata.Add(1, dtResult_XD);//1:
+                topodata.Add(2, dt_PG_Switch);//2:开关设施 3、4 
+                topodata.Add(3, dtResult_Trans);//3:配电设施5 
+                topodata.Add(4, new DataTable());//4:电源6  
+                topodata.Add(5, dt_PG_ZNKG);//5:母线号dtResult_XD里面的devicetype为7的 
+                topodata.Add(6, dtResult_Feeder);//6:馈线  
+                topodata.Add(7, dt_check);//配变负荷
+                topodata.Add(8, dtErr);//异常线路
+                topodata.Add(9, dtFeederLoss);//丢失线段
+                topodata.Add(10, dtTransLoss);//丢失配变
+                topodata.Add(11, dtTopoLoss);//拓扑信息缺失 
+                                             //topodata.Add(12, dt_grid);//网格单元边界 
+                                             // topodata.Add(13, wgdytable);//网格单元数据;
+                PGClass.SaveLogInfo(new List<object[]>() { new object[] { task_id, "线路数量：" + dtTempt.Rows.Count } }, GhdwConn);
+                // TestClass.SaveToText(topodata,parameter,dwxh,dept_code,sg_code,listTL);
+
+
+                #region 释放资源
+                DataTableClass.Dispose(dt);
+                DataTableClass.Dispose(dt_pg_mxh);
+                DataTableClass.Dispose(dt_Oracle_Feeder);
+                DataTableClass.Dispose(dtErrTemp);
+                DataTableClass.Dispose(dt_Oracle_CXXDXX);
+                DataTableClass.Dispose(dt_Oracle_Trans);
+                DataTableClass.Dispose(dtTransLoad);
+                DataTableClass.Dispose(dt_PG_ZWZSGLKG);
+                DataTableClass.Dispose(dt_PG_ZWZSRDQ);
+                DataTableClass.Dispose(dt_PG_ZNLJX);
+                DataTableClass.Dispose(dt_PG_ZNGLKG);
+                DataTableClass.Dispose(dt_PG_ZNRDQ);
+                DataTableClass.Dispose(dt_PG_ZNSB);
+                //DataTableClass.Dispose(dt_PG_ZNDLQ);
+                //DataTableClass.Dispose(dt_PG_ZNFHKG);
+                DataTableClass.Dispose(dt_PG_ZNDL);
+                DataTableClass.Dispose(dt_PG_ZNQTSB);
+                listCondition.Clear();
+                #endregion
+            }
+            catch (Exception ex)
+            {
+                PGClass.SaveLogInfo(new List<object[]>() { new object[] { task_id, "异常：" + ex.Message + ex.StackTrace } }, GhdwConn);
+                isSuccess = false;
+                throw new Exception(ex.StackTrace + Environment.NewLine + ex.Message);
+            }
+            finally
+            {
+                //编写异常信息
+                try
+                {
+                    if (GhdwConn != null)
+                    {
+                        GhdwConn.Close();
+                        GhdwConn.Dispose();
+                    }
+                    if (conn != null)
+                    {
+                        conn.Close();
+                        conn.Dispose();
+                    }
+                    if (oracleConn != null)
+                    {
+                        oracleConn.Close();
+                        oracleConn.Dispose();
+                    }
+                    isSuccess1 = isSuccess;
+                }
+                catch (Exception e) { throw new Exception(e.StackTrace + e.Message); }
+            }
+            return topodata;
+        }
+
+        private void OperateXD(ref DataTable dtResult_XD, Dictionary<long, List<long>> listTL,ref  DataTable dt_PG_Switch,DataTable dtResultFeeder)
+        {
+            try
+            {
+
+                List<long> listV = new List<long>();
+                DataTable dtS = dt_PG_Switch.Clone();
+                dtS.Rows.Add(new object[] { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 });
+                DataTable dtxd = dtResult_XD.Clone();
+                dtxd.Rows.Add(dtResult_XD.Rows[0].ItemArray);
+                foreach (long item in listTL.Keys)
+                {
+                    listV = listTL[item];
+                    DataRow[] drs2 = dtResult_XD.Select("xl_oid=" + item + " and cxkg=oid and cxkglx=typeid");
+                    foreach (var id in listV)
+                    {
+                        DataRow[] drs1 = dtResultFeeder.Select("xl_oid=" + id);
+                        
+                        DataRow[] drs = dtResult_XD.Select("xl_oid=" + id);
+                        foreach (DataRow item2 in drs)
+                        {
+                            dtResult_XD.Rows.Remove(item2);
+                        }
+                        DataRow[] drs3 = dtResult_XD.Select("oid=" + drs1[0]["cxkg"] + " and typeid=" + drs1[0]["typeid"]);
+                        if (drs1.Length > 0)
+                        {
+                            dtS.Rows[0]["cxkg"] = drs1[0]["cxkg"];
+                            dtS.Rows[0]["cxkglx"] = drs1[0]["cxkglx"];
+                            dtS.Rows[0]["ssxl"] = drs1[0]["cxkglx"].ToString() + drs1[0]["cxkg"].ToString();
+                            dtS.Rows[0]["start_conn"] = drs3.Length > 0 ? drs3[0]["start_conn"] : null;
+                            dtS.Rows[0]["oid"] = item + "11";
+                            dtS.Rows[0]["dm_id"] = id + "11";
+                            dtS.Rows[0]["devicetype"] = 3;
+                            dtS.Rows[0]["xl_oid"] = id;
+                            dtS.Rows[0]["rows"] = 1;
+                            dt_PG_Switch.Merge(dtS);
+                            if (drs2.Length > 0)
+                            {
+                                dtS.Rows[0]["cxkg"] = drs2[0]["cxkg"];
+                                dtS.Rows[0]["cxkglx"] = drs2[0]["cxkglx"];
+                                dtS.Rows[0]["ssxl"] = drs2[0]["cxkglx"].ToString() + drs2[0]["cxkg"].ToString();
+                                dtS.Rows[0]["xl_oid"] = item;
+                                dtS.Rows[0]["rows"] = 2;
+                                dt_PG_Switch.Merge(dtS);
+                            }
+                            dtxd.Rows[0]["oid"] = drs1[0]["cxkg"];
+                            dtxd.Rows[0]["cxkg"] = drs1[0]["cxkg"];
+                            dtxd.Rows[0]["cxkglx"] = drs1[0]["cxkglx"];
+                            dtxd.Rows[0]["typeid"] = 0;
+                            dtxd.Rows[0]["xl_oid"] = id;
+                            dtxd.Rows[0][5] = drs3.Length > 0 ? drs3[0]["start_conn"] : null;
+                            dtxd.Rows[0][4] = id + "1";
+                            dtResult_XD.Merge(dtxd);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+
+                
+            }
+
+        }
+
+        private DataTable GetGridBounder(NpgsqlConnection ghdwConn)
+        {
+            DataTable dt = PGClass.QueryNpgDatabase(ghdwConn, ConfigClass.PG_Query_Grid_Bounder, new List<object>() { task_id, parameter });
+            return dt;
+        }
+
+        private DataTable GetGridCell(OracleConnection oracleConn, NpgsqlConnection conn, NpgsqlConnection ghConn)
+        {
+            DataTable wgdytable = new DataTable();
+            DataTable dt_oracle_grid = OracleClass.QueryOracleDatabase(ConfigClass.Oracle_QueryGrid, new List<object>() { dwxh }, oracleConn);
+            StringBuilder sb = new StringBuilder();
+            StringBuilder sb2 = new StringBuilder();
+            List<string> list = new List<string>();
+            string id = "";
+            foreach (DataRow item in dt_oracle_grid.Rows)
+            {
+                id = item["AREA_DIVIDE_ID"].ToString();
+                if (list.Contains(id)) continue;
+                list.Add(id);
+                sb.Append("'");
+                sb.Append(id);
+                sb.Append("',");
+                sb2.Append("abs(mod(hashtext('" + id + "'), 64))");
+                sb2.Append(",");
+            }
+            if (sb.Length == 0) return wgdytable;
+            sb.Remove(sb.Length - 1, 1);
+            sb2.Remove(sb2.Length - 1, 1);
+            DataTable dt = PGClass.QueryNpgDatabase(conn, ConfigClass.PG_QueryGridCell, new List<object>() { sb.ToString(), sb2.ToString(), dwxh, task_id });
+            //PGClass.ExecuteNoneQuery(string.Format("delete from wjfx.t_tx_ghsb_qyxx where task_id='{0}'", task_id), ghConn);
+            return DataTableClass.OperateLeftJoin(dt, dt_oracle_grid, new List<string>() { "sbid" }, new List<string>() { "ID" });
+            //PGClass.WriteToServer(DataTableClass.OperateLeftJoin( dt,dt_oracle_grid, new List<string>() { "sbid" }, new List<string>() { "ID" }), "wjfx.t_tx_ghsb_qyxx", ghConn);
+        }
+
+        private DataTable TableConvertDecimalToLong(DataTable dt_Oracle_Feeder, string fieldName)
+        {
+            DataTable dt = dt_Oracle_Feeder.Clone();
+            dt.Columns["oid"].DataType = typeof(long);
+            foreach (DataRow item in dt_Oracle_Feeder.Rows)
+            {
+                dt.Rows.Add(item.ItemArray);
+            }
+            return dt;
+        }
+
+        private void BuildTestData1(ref DataTable dt_Oracle_Feeder_1, DataTable dtResult_Feeder_1)
+        {
+            string guid = "";
+            foreach (DataRow item in dtResult_Feeder_1.Rows)
+            {
+                guid = Guid.NewGuid().ToString();
+                dt_Oracle_Feeder_1.Rows.Add(new object[] { item["sbid"], 1, dwxh, 400, 200, 200 });
+            }
+        }
+
+        private void BuildTestData(ref DataTable dt_Oracle_Feeder, DataTable dtResult_Feeder)
+        {
+            string guid = "";
+            foreach (DataRow item in dtResult_Feeder.Rows)
+            {
+                if (item["xl_oid"].ToString() == "150000103873" ||
+                    item["xl_oid"].ToString() == "150000255521") continue;
+                guid = Guid.NewGuid().ToString();
+                dt_Oracle_Feeder.Rows.Add(new object[] { item["sbid"], guid, guid, 1, 2, 60, "202212", dwxh, 400, 200, 200 });
+            }
+        }
+
+        private DataTable RemoveOracleFeeder(DataTable dt_Oracle_Feeder, DataTable dtResult_Feeder_2)
+        {
+            DataTable dt = dt_Oracle_Feeder.Clone();
+            DataRow[] drs;
+            foreach (DataRow item in dt_Oracle_Feeder.Rows)
+            {
+                drs = dtResult_Feeder_2.Select("sbid='" + item["ssdkx"] + "'");
+                if (drs.Length > 0)
+                    dt.Rows.Add(item.ItemArray);
+            }
+            return dt;
+        }
+
+        private List<string> GetNoInfoIdsStr(DataTable dtResult_Feeder, DataTable dt_Oracle_Feeder, string dwxh, ref DataTable dtResult_Feeder_1, ref DataTable dtResult_Feeder_2)
+        {
+            StringBuilder sb = new StringBuilder();
+            DataRow[] drs;
+            StringBuilder sb1 = new StringBuilder();
+            int count = 0;
+            foreach (DataRow item in dtResult_Feeder.Rows)
+            {
+                if (item["xl_oid"] == DBNull.Value)
+                {
+                    dtResult_Feeder_2.Rows.Add(item.ItemArray);
+                    continue;
+                }
+                drs = dt_Oracle_Feeder.Select("oid='" + item["xl_oid"] + "'");
+                if (drs.Length > 0)
+                {
+                    if (drs[0]["DEPT_CODE"].ToString() == dwxh && count < 4)
+                    {
+                        if (item["xl_sbid"] != DBNull.Value)
+                        {
+                            sb1.Append(item["xl_oid"] + ",");
+                            count++;
+                        }
+                    }
+                    dtResult_Feeder_2.Rows.Add(item.ItemArray);
+                    continue;
+                }
+                if (item["xl_sbid"] != DBNull.Value)
+                {
+                    sb.Append(item["xl_oid"] + ",");
+                }
+                dtResult_Feeder_1.Rows.Add(item.ItemArray);
+            }
+            if (sb.Length > 0)
+            {
+                sb.Remove(sb.Length - 1, 1);
+            }
+            if (sb1.Length > 0)
+            {
+                sb1.Remove(sb1.Length - 1, 1);
+            }
+
+            return new List<string>() { sb.ToString(), sb1.ToString() };
+        }
+        private List<string> GetInfoIdsStr(DataTable dt_f)
+        {
+            StringBuilder sb = new StringBuilder();
+            StringBuilder sb1 = new StringBuilder();
+            foreach (DataRow item in dt_f.Rows)
+            {
+                if (item["sbid"] == DBNull.Value) continue;
+                if (item["type"].ToString() == "1")
+                {
+                    sb.Append("'" + item["sbid"] + "',");
+                }
+                else
+                {
+                    sb1.Append("'" + item["sbid"] + "',");
+                }
+            }
+            if (sb.Length > 0)
+            {
+                sb.Remove(sb.Length - 1, 1);
+            }
+            if (sb1.Length > 0)
+            {
+                sb1.Remove(sb1.Length - 1, 1);
+            }
+            return new List<string>() { sb.ToString(), sb1.ToString() };
+        }
+        private void UpdateDXLength(NpgsqlConnection GhdwConn, ref DataTable dtResult_XD, DataTable dtFeeder)
+        {
+            Dictionary<long, double> dicJkx = new Dictionary<long, double>();
+            Dictionary<long, double> dicDlx = new Dictionary<long, double>();
+            long oid = 0;
+            double jkxScale = 0;
+            double dlxScale = 0;
+            foreach (DataRow item in dtFeeder.Rows)
+            {
+                oid = Convert.ToInt64(item["xl_oid"] == DBNull.Value ? "0" : item["xl_oid"].ToString());
+                if (!dicJkx.ContainsKey(oid))
+                {
+                    if (item["JKXCD"] != DBNull.Value)
+                    {
+                        jkxScale = Convert.ToDouble(item["JKXCD"]);
+                        if(!dicJkx.ContainsKey(oid)) dicJkx.Add(oid, jkxScale);
+                    }
+                    if (item["DLXCD"] != DBNull.Value)
+                    {
+                        dlxScale = Convert.ToDouble(item["DLXCD"]);
+                        if (!dicDlx.ContainsKey(oid)) dicDlx.Add(oid, dlxScale);
+                    }
+                }
+            }
+            double length = 0;
+            double scale = 1;
+            for (int i = 0; i < dtResult_XD.Rows.Count; i++)
+            {
+                oid = Convert.ToInt64(dtResult_XD.Rows[i]["xl_oid"] == DBNull.Value ? "0" : dtResult_XD.Rows[i]["xl_oid"].ToString());
+                if (dtResult_XD.Rows[i]["type"].ToString() == "中压架空")
+                {
+                    if (dicJkx.ContainsKey(oid))
+                    {
+                        length = dicJkx[oid];
+                        scale = Convert.ToDouble(dtResult_XD.Rows[i]["xlcd_bl"] == DBNull.Value ? 1 : dtResult_XD.Rows[i]["xlcd_bl"]);
+                        dtResult_XD.Rows[i]["xlcd"] = Math.Round(length * scale, 6);
+                    }
+                    else
+                    {
+
+                    }
+                }
+                else if (dtResult_XD.Rows[i]["type"].ToString() == "中压电缆")
+                {
+                    if (dicDlx.ContainsKey(oid))
+                    {
+                        length = dicDlx[oid];
+                        scale = Convert.ToDouble(dtResult_XD.Rows[i]["xlcd_bl"] == DBNull.Value ? 1 : dtResult_XD.Rows[i]["xlcd_bl"]);
+                        dtResult_XD.Rows[i]["xlcd"] = Math.Round(length * scale, 6);
+                    }
+                    else
+                    {
+
+                    }
+                }
+            }
+        }
+
+        private Dictionary<long, int> GetTlStatus(DataTable dtResult_Feeder, Dictionary<long, List<long>> listTL)
+        {
+            Dictionary<long, int> dic = new Dictionary<long, int>();
+            foreach (var item in listTL.Keys)
+            {
+                List<long> list = listTL[item];
+                int count = 0;
+                for (int i = 0; i < list.Count; i++)
+                {
+                    DataRow[] drs = dtResult_Feeder.Select("xl_oid=" + list[i]);
+                    foreach (DataRow dr in drs)
+                    {
+                        if (dr["kgzt"].ToString() == "1")
+                        {
+                            count++;
+                        }
+                    }
+                }
+                if (count == 0)
+                {
+                    dic.Add(item, 1);
+                }
+                else
+                {
+                    dic.Add(item, 0);
+                }
+            }
+            return dic;
+        }
+        private List<string> GetListYHFJ(DataTable dt)
+        {
+            List<string> list = new List<string>();
+            foreach (DataRow item in dt.Rows)
+            {
+                if (item["YHFJ"].ToString() != "1") continue;
+                string ssdz = item["ssdz"].ToString();
+                if (!list.Contains(ssdz))
+                {
+                    list.Add(ssdz);
+                }
+            }
+            return list;
+        }
+
+    private string GetKGZTSql(DataTable dtTempt)
+        {
+            paramObjList.Clear();
+            foreach (object obj in paramList)
+            {
+                paramObjList.Add(obj);
+            }
+            DataRow[] dr305000 = dtTempt.Select("typeid=305000");
+            DataRow[] dr306000 = dtTempt.Select("typeid=306000");
+            DataRow[] dr307000 = dtTempt.Select("typeid=307000");
+            string sql = "";
+            //1闭合、0断开
+            if (dr305000.Length > 0)
+            {
+                StringBuilder sb = new StringBuilder();
+                for (int i = 0; i < dr305000.Length; i++)
+                {
+                    if (dr305000[i]["xl_cxkg"] == DBNull.Value) continue;
+                    sb.Append(dr305000[i]["xl_cxkg"] + ",");
+                }
+                if (sb.Length > 0)
+                {
+                    sb = sb.Remove(sb.Length - 1, 1);
+                    sql = "select oid,sbzlx,(case when ckzt = 0 then 0 else 1 end) as kgzt from sxgis.v_t_tx_znyc_dlq where "+ parameter + " and oid in ("+ sb.ToString() + ")";
+                }
+            }
+            if (dr306000.Length > 0)
+            {
+                StringBuilder sb = new StringBuilder();
+                for (int i = 0; i < dr306000.Length; i++)
+                {
+                    if (dr306000[i]["xl_cxkg"] == DBNull.Value) continue;
+                    sb.Append(dr306000[i]["xl_cxkg"] + ",");
+                }
+                if (sb.Length > 0)
+                {
+                    sb = sb.Remove(sb.Length - 1, 1);
+                    string sql2 = "select oid,sbzlx,(case when ckzt = 0 then 0 else 1 end) as kgzt from sxgis.v_t_tx_znyc_glkg where "+ parameter + " and oid in (" + sb.ToString() + ")";
+                    if (string.IsNullOrEmpty(sql))
+                    {
+                        sql = sql2;
+                    }
+                    else
+                    {
+                        sql = sql + " union all " + sql2;
+                    }
+                }
+            }
+            if (dr307000.Length > 0)
+            {
+                StringBuilder sb = new StringBuilder();
+                for (int i = 0; i < dr307000.Length; i++)
+                {
+                    if (dr307000[i]["xl_cxkg"] == DBNull.Value) continue;
+                    sb.Append(dr307000[i]["xl_cxkg"] + ",");
+                }
+                if (sb.Length > 0)
+                {
+                    sb = sb.Remove(sb.Length - 1, 1);
+                    string sql3 = "select oid,sbzlx,(case when ckzt = 0 then 0 else 1 end) as kgzt from sxgis.v_t_tx_znyc_fhkg where "+ parameter + " and oid in (" + sb.ToString() + ")";
+                    if (string.IsNullOrEmpty(sql))
+                    {
+                        sql = sql3;
+                    }
+                    else
+                    {
+                        sql = sql + " union all " + sql3;
+                    }
+                }
+            }
+            return sql;
+        }
+
+        private string GetParamIndex(string parameters, int maxIndex) {
+            string baseStr = "@param";
+            if (maxIndex < 0) return baseStr + "0"; 
+            for (int i=maxIndex;i >=0; i--) {
+                if (parameters.IndexOf(baseStr+i) > 0) {
+                    return baseStr + (i + 1);
+                }
+            }
+            return baseStr+"0";
+        }
+
+
+        public void GetTransLoadCheckTable(DataTable dtTrans, DataTable dtFeeder, ref DataTable dt_check, string taskId)
+        {
+            string condition = "";
+            foreach (DataRow dataRow in dtFeeder.Rows)
+            {
+                if (dataRow["xl_cxkg"] == DBNull.Value || dataRow["typeid"] == DBNull.Value) continue;
+                condition = "cxkg=" + dataRow["xl_cxkg"] + " and cxkglx=" + dataRow["typeid"];
+                DataRow[] drs = dtTrans.Select(condition);
+                if (drs.Length == 0)
+                {
+                    dt_check.Rows.Add(new object[] { Guid.NewGuid().ToString(), dataRow["xl_oid"], loadTime, dataRow["TIME_MAX"], 0, taskId });
+                    continue;
+                }
+                double sum_fh = 0;
+                object load;
+                for (int i = 0; i < drs.Length; i++)
+                {
+                    load = drs[i]["load"];
+                    sum_fh += Convert.ToDouble(load == DBNull.Value ? 0 : load);
+                }
+                dt_check.Rows.Add(new object[] { Guid.NewGuid().ToString(), dataRow["xl_oid"], loadTime, dataRow["TIME_MAX"], Math.Round(sum_fh, 2), taskId });
+            }
+        }
+        public void GetTransLoadCheckTable1(DataTable dtTrans, DataTable dtFeeder, ref DataTable dt_check, string taskId)
+        {
+            string condition = "";
+            foreach (DataRow dataRow in dtFeeder.Rows)
+            {
+                if (dataRow["type"].ToString() != "1") continue;
+                condition = "xl_oid=" + dataRow["xl_oid"];
+                DataRow[] drs = dtTrans.Select(condition);
+                if (drs.Length == 0)
+                {
+                    dt_check.Rows.Add(new object[] { Guid.NewGuid().ToString(), dataRow["xl_oid"], loadTime, dataRow["TIME_MAX"], 0, taskId });
+                    continue;
+                }
+                double sum_fh = 0;
+                object load;
+                for (int i = 0; i < drs.Length; i++)
+                {
+                    load = drs[i]["load"];
+                    sum_fh += Convert.ToDouble(load == DBNull.Value ? 0 : load);
+                }
+                dt_check.Rows.Add(new object[] { Guid.NewGuid().ToString(), dataRow["xl_oid"], loadTime, dataRow["TIME_MAX"], Math.Round(sum_fh, 2), taskId });
+            }
+        }
+
+        private string GetEquipId(DataRow[] drs)
+        {
+            StringBuilder sb = new StringBuilder();
+            List<object> list = new List<object>();
+            foreach (DataRow dr in drs)
+            {
+                if (dr["OBJ_ID"] == DBNull.Value) continue;
+                if (list.Contains(dr["OBJ_ID"])) continue;
+                sb.Append(dr["OBJ_ID"] + ",");
+                list.Add(dr["OBJ_ID"]);
+            }
+            if (sb.Length > 0)
+                sb.Remove(sb.Length - 1, 1);
+            return sb.ToString();
+        }
+        public struct FeederLog
+        {
+            public object oid;
+            public object load;
+        }
+        #region 获取配变负荷
+        #region 单次获取配变负荷
+        public void GetLoadDataByTask(DataTable dtFeeder, DataTable dtTrans, string sgcode, string deptcode, ref DataTable dt, string taskId, decimal taskCount, Npgsql.NpgsqlConnection GhdwConn)
+        {
+            PGClass.SaveLogInfo(new List<object[]>() { new object[] { taskId, "进入调用配变负荷方法" } }, GhdwConn);
+            try
+            {
+                int totalCount = dtFeeder.Rows.Count;
+                decimal count = Math.Ceiling(totalCount / taskCount);
+                List<Task<List<object>>> list = new List<Task<List<object>>>();
+                if (taskCount == 1)
+                {
+                    DataTable dt1 = dtFeeder.Clone();
+                    for (int j = 0; j < totalCount; j++)
+                    {
+                        dt1.Rows.Add(dtFeeder.Rows[j].ItemArray);
+                    }
+                    List<object> result = QueryTransLoad(dt1, dtTrans, sgcode, deptcode, taskId, 1);
+                    dt = (DataTable)result[0];
+                    dicStatus = (Dictionary<long, int>)result[1];
+                }
+                else
+                {
+                    for (int i = 0; i < taskCount; i++)
+                    {
+                        DataTable dt1 = dtFeeder.Clone();
+                        for (int j = 0; j < totalCount; j++)
+                        {
+                            if (j >= count * i && j < count * (i + 1))
+                            {
+                                dt1.Rows.Add(dtFeeder.Rows[j].ItemArray);
+                            }
+                        }
+                        Task<List<object>> t1 = new Task<List<object>>(() =>
+                        {
+                            return QueryTransLoad(dt1, dtTrans, sgcode, deptcode, taskId, i);
+                        });
+                        t1.Start();
+                        list.Add(t1);
+                    }
+                    Task.WaitAll(list.ToArray());
+                    for (int i = 0; i < list.Count; i++)
+                    {
+                        dt.Merge((DataTable)list[i].Result[0]);
+                        Dictionary<long, int> dic = (Dictionary<long, int>)list[i].Result[1];
+                        foreach (var item in dic.Keys)
+                        {
+                            if (!dicStatus.ContainsKey(item))
+                            {
+                                dicStatus.Add(item, dic[item]);
+                            }
+                        }
+                        list[i].Dispose();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                PGClass.SaveLogInfo(new List<object[]>() { new object[] { taskId, "GetLoadData异常" + ex.Message + ex.StackTrace } }, GhdwConn);
+                isSuccess = false;
+                //throw new Exception(ex.StackTrace + Environment.NewLine + ex.Message);
+            }
+            finally
+            {
+                try
+                {
+                    PGClass.SaveLogInfo(new List<object[]>() { new object[] { taskId, "配变负荷获取结束" } }, GhdwConn);
+                }
+                catch (Exception e) { throw new Exception(e.StackTrace + e.Message); }
+            }
+        }
+        public void GetLoadDataByTask1(DataTable dtFeeder, DataTable dtTrans, string sgcode, string deptcode, ref DataTable dt, string taskId, decimal taskCount, Npgsql.NpgsqlConnection GhdwConn)
+        {
+            PGClass.SaveLogInfo(new List<object[]>() { new object[] { taskId, "进入调用配变负荷方法" } }, GhdwConn);
+            try
+            {
+                int totalCount = dtFeeder.Rows.Count;
+                decimal count = Math.Ceiling(totalCount / taskCount);
+                List<Task<List<object>>> list = new List<Task<List<object>>>();
+                if (taskCount == 1)
+                {
+                    DataTable dt1 = dtFeeder.Clone();
+                    for (int j = 0; j < totalCount; j++)
+                    {
+                        dt1.Rows.Add(dtFeeder.Rows[j].ItemArray);
+                    }
+                    List<object> result = QueryTransLoad1(dt1, dtTrans, sgcode, deptcode, taskId, 1);
+                    dt = (DataTable)result[0];
+                    dicStatus = (Dictionary<long, int>)result[1];
+                }
+                else
+                {
+                    for (int i = 0; i < taskCount; i++)
+                    {
+                        DataTable dt1 = dtFeeder.Clone();
+                        for (int j = 0; j < totalCount; j++)
+                        {
+                            if (j >= count * i && j < count * (i + 1))
+                            {
+                                dt1.Rows.Add(dtFeeder.Rows[j].ItemArray);
+                            }
+                        }
+                        Task<List<object>> t1 = new Task<List<object>>(() =>
+                        {
+                            return QueryTransLoad1(dt1, dtTrans, sgcode, deptcode, taskId, i);
+                        });
+                        t1.Start();
+                        list.Add(t1);
+                    }
+                    Task.WaitAll(list.ToArray());
+                    for (int i = 0; i < list.Count; i++)
+                    {
+                        dt.Merge((DataTable)list[i].Result[0]);
+                        Dictionary<long, int> dic = (Dictionary<long, int>)list[i].Result[1];
+                        foreach (var item in dic.Keys)
+                        {
+                            if (!dicStatus.ContainsKey(item))
+                            {
+                                dicStatus.Add(item, dic[item]);
+                            }
+                        }
+                        list[i].Dispose();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                PGClass.SaveLogInfo(new List<object[]>() { new object[] { taskId, "GetLoadData异常" + ex.Message + ex.StackTrace } }, GhdwConn);
+                isSuccess = false;
+                //throw new Exception(ex.StackTrace + Environment.NewLine + ex.Message);
+            }
+            finally
+            {
+                try
+                {
+                    PGClass.SaveLogInfo(new List<object[]>() { new object[] { taskId, "配变负荷获取结束" } }, GhdwConn);
+                }
+                catch (Exception e) { throw new Exception(e.StackTrace + e.Message); }
+            }
+        }
+        public List<object> QueryTransLoad(DataTable dtFeeder, DataTable dtTrans, string sgcode, string deptcode, string taskId, int count)
+        {
+            PGClass.SaveLogInfo(new List<object[]>() { new object[] { taskId, "第" + count + "次：进入配变负荷线程" } });
+            List<object> listResult = new List<object>();
+            DataTable dt = DataTableClass.CreateTransLoadTable();
+            string condition = "";
+            Dictionary<long, int> dic = new Dictionary<long, int>();
+            foreach (DataRow dataRow in dtFeeder.Rows)
+            {
+                int status = 0;
+                long xloid = dataRow["xl_oid"] == DBNull.Value ? 0 : Convert.ToInt64(dataRow["xl_oid"]);
+                if (dataRow["OBJ_ID"] != DBNull.Value && dataRow["TIME_MAX"] != DBNull.Value)
+                {
+                    condition = "cxkg=" + dataRow["xl_cxkg"] + " and cxkglx=" + dataRow["typeid"];
+                    DataRow[] drs = dtTrans.Select(condition);
+                    if (drs.Length > 0)
+                        GetTransLoad(drs, sgcode, dataRow["TIME_MAX"].ToString(), deptcode, ref dt, taskId, ref status, xloid);
+                }
+                else
+                {
+                    status = 2;
+                }
+                if (!dic.ContainsKey(xloid)) dic.Add(xloid, status);
+            }
+            PGClass.SaveLogInfo(new List<object[]>() { new object[] { taskId, "第" + count + "次：配变负荷线程结束" } });
+            listResult.Add(dt);
+            listResult.Add(dic);
+            return listResult;
+        }
+        public List<object> QueryTransLoad1(DataTable dtFeeder, DataTable dtTrans, string sgcode, string deptcode, string taskId, int count)
+        {
+            PGClass.SaveLogInfo(new List<object[]>() { new object[] { taskId, "第" + count + "次：进入配变负荷线程" } });
+            List<object> listResult = new List<object>();
+            DataTable dt = DataTableClass.CreateTransLoadTable();
+            string condition = "";
+            Dictionary<long, int> dic = new Dictionary<long, int>();
+            foreach (DataRow dataRow in dtFeeder.Rows)
+            {
+                int status = 0;
+                long xloid = dataRow["xl_oid"] == DBNull.Value ? 0 : Convert.ToInt64(dataRow["xl_oid"]);
+                if (dataRow["OBJ_ID"] != DBNull.Value && dataRow["TIME_MAX"] != DBNull.Value)
+                {
+                    condition = "ssdkx=" + dataRow["xl_oid"];
+                    DataRow[] drs = dtTrans.Select(condition);
+                    if (drs.Length > 0)
+                        GetTransLoad(drs, sgcode, dataRow["TIME_MAX"].ToString(), deptcode, ref dt, taskId, ref status, xloid);
+                }
+                else
+                {
+                    status = 2;
+                }
+                dic.Add(Convert.ToInt64(xloid), status);
+            }
+            PGClass.SaveLogInfo(new List<object[]>() { new object[] { taskId, "第" + count + "次：配变负荷线程结束" } });
+            listResult.Add(dt);
+            listResult.Add(dic);
+            return listResult;
+        }
+        private void GetTransLoad(DataRow[] drs, string sgcode, string periods, string deptcode, ref DataTable dt, string taskId, ref int status, long xl_oid)
+        {
+            string data = "";
+            string redata = "";
+            try
+            {
+
+                StringBuilder sb = new StringBuilder();
+                List<object> list = new List<object>();
+                List<object> list1 = new List<object>();
+                List<string> listEquips = new List<string>();
+                foreach (DataRow dr in drs)
+                {
+                    if (dr["OBJ_ID"] == DBNull.Value) continue;
+                    if (list.Contains(dr["OBJ_ID"])) continue;
+                    sb.Append(dr["OBJ_ID"] + ",");
+                    list.Add(dr["OBJ_ID"]);
+                    list1.Add(dr["OBJ_ID"]);
+                    if (list1.Count > 100)
+                    {
+                        sb.Remove(sb.Length - 1, 1);
+                        listEquips.Add(sb.ToString());
+                        sb.Clear();
+                        list1.Clear();
+                    }
+                }
+                if (list1.Count > 0) listEquips.Add(sb.ToString());
+                JArray array = new JArray();
+                for (int i = 0; i < listEquips.Count; i++)
+                {
+                    LoadData loadData = new LoadData();
+                    loadData.srvCode = "00000001";
+                    loadData.equipType = "0302";
+                    loadData.equipId = listEquips[i];
+                    loadData.sgcode = sgcode;
+                    loadData.funcCode = "01";
+                    loadData.periods = periods;
+                    loadData.deptcode = deptcode;
+                    loadData.type = "01";
+                    loadData.serialNo = "FF000000-0000-0050-0000-000000000600-02216";
+                    LoadInfo info = new LoadInfo();
+                    info.user = "8ad5979d66ec89dd016936e0524b5e07";
+                    info.serviceCode = "ele_calc_run_service_zb";//固定值
+                    info.data = new List<LoadData>() { loadData };
+                    data = JsonConvert.SerializeObject(info);
+                    var client = new RestClient(ConfigClass.LoadDataIp);
+                    client.Timeout = 600000;
+                    client.ThrowOnAnyError = true;
+                    var request = new RestRequest(Method.POST);
+                    request.Timeout = 600000;
+                    request.AddParameter("application/json", data, ParameterType.RequestBody);
+                    var response = client.Execute(request);
+                    redata = response.Content;
+                    client.Delete(request);
+                    //以上为负荷预测接口调用
+                    Dictionary<string, object> ddd = null;
+                    try
+                    {
+                        ddd = JsonConvert.DeserializeObject<Dictionary<string, object>>(redata);
+                    }
+                    catch
+                    {
+                    }
+                    if (ddd == null || !ddd.ContainsKey("data"))
+                    {
+                        PGClass.SaveLogInfo(new List<object[]>() { new object[] { taskId, "配变负荷Josn转换异常：负荷参数:" + data + Environment.NewLine + "输出值：" + redata } });
+                        continue;
+                    }
+                    array.Merge(JArray.Parse(ddd["data"].ToString()));
+                }
+                if (array.Count > 0)
+                {
+                    double value = 0;
+                    bool b = false;
+                    foreach (var a in array)
+                    {
+                        if (a == null) continue;
+                        foreach (var aa in a.Children())
+                        {
+                            if (aa == null) continue;
+                            Dictionary<string, double> arr = null;
+                            try
+                            {
+                                arr = JsonConvert.DeserializeObject<Dictionary<string, double>>(aa.First.ToString());
+                            }
+                            catch
+                            {
+                            }
+                            if (arr == null || !arr.ContainsKey("k_10_7")) continue;
+                            b = true;
+                            arr.TryGetValue("k_10_7", out value);
+                            value = Math.Round(value, 2);
+                            GetTransData(drs, ((JProperty)aa).Name, value, ref dt, taskId, xl_oid);
+                        }
+                    }
+                    if (!b)
+                    {
+                        status = 3;
+                    }
+                    else
+                    {
+                        status = 0;
+                    }
+
+                }
+            }
+            catch (Exception ex)
+            {
+                PGClass.SaveLogInfo(new List<object[]>() { new object[] { taskId, "配变负荷解析异常：负荷参数:" + data + Environment.NewLine + "输出值：" + redata } });
+            }
+
+            //try
+            //{
+            //    LoadData loadData = new LoadData();
+            //    loadData.srvCode = "00000001";
+            //    loadData.equipType = "0302";
+            //    loadData.equipId = GetEquipId(drs);
+            //    loadData.sgcode = sgcode;
+            //    loadData.funcCode = "01";
+            //    loadData.periods = periods;
+            //    loadData.deptcode = deptcode;
+            //    loadData.type = "01";
+            //    loadData.serialNo = "FF000000-0000-0050-0000-000000000600-02216";
+            //    LoadInfo info = new LoadInfo();
+            //    info.user = "8ad5979d66ec89dd016936e0524b5e07";
+            //    info.serviceCode = "ele_calc_run_service_zb";//固定值
+            //    info.data = new List<LoadData>() { loadData };
+            //    data = JsonConvert.SerializeObject(info);
+            //    var client = new RestClient(ConfigClass.LoadDataIp);
+            //    client.Timeout = 600000;
+            //    client.ThrowOnAnyError = true;
+            //    var request = new RestRequest(Method.POST);
+            //    request.Timeout = 600000;
+            //    request.AddParameter("application/json", data, ParameterType.RequestBody);
+            //    var response = client.Execute(request);
+            //    redata = response.Content;
+            //    client.Delete(request);
+            //    //以上为负荷预测接口调用
+            //    Dictionary<string, object> ddd = null;
+            //    try
+            //    {
+            //        ddd = JsonConvert.DeserializeObject<Dictionary<string, object>>(redata);
+            //    }
+            //    catch
+            //    {
+            //    }
+            //    if (ddd == null || !ddd.ContainsKey("data"))
+            //    {
+            //        PGClass.SaveLogInfo(new List<object[]>() { new object[] { taskId, "配变负荷Josn转换异常：负荷参数:" + data + Environment.NewLine + "输出值：" + redata } });
+            //        return;
+            //    }
+            //    JArray array = JArray.Parse(ddd["data"].ToString());
+            //    double value = 0;
+            //    bool b = false;
+            //    foreach (var a in array)
+            //    {
+            //        if (a == null) continue;
+            //        foreach (var aa in a.Children())
+            //        {
+            //            if (aa == null) continue;
+            //            Dictionary<string, double> arr = null;
+            //            try
+            //            {
+            //                arr = JsonConvert.DeserializeObject<Dictionary<string, double>>(aa.First.ToString());
+            //            }
+            //            catch
+            //            {
+            //            }
+            //            if (arr == null || !arr.ContainsKey("k_10_7")) continue;
+            //            b = true;
+            //            arr.TryGetValue("k_10_7", out value);
+            //            value = Math.Round(value, 2);
+            //            GetTransData(drs, ((JProperty)aa).Name, value, ref dt, taskId, xl_oid);
+            //        }
+            //    }
+            //    if (!b)
+            //    {
+            //        status = 3;
+            //    }
+            //    else
+            //    {
+            //        status = 0;
+            //    }
+            //}
+            //catch (Exception ex)
+            //{
+            //    PGClass.SaveLogInfo(new List<object[]>() { new object[] { taskId, "配变负荷解析异常：负荷参数:" + data + Environment.NewLine + "输出值：" + redata } });
+            //}
+        }
+        #endregion
+
+        #region 批量获取配变负荷
+        public void GetLoadData(DataTable dtFeeder, DataTable dtTrans, string sgcode, string deptcode, ref DataTable dt, string taskId, Npgsql.NpgsqlConnection GhdwConn, string dwxh, string startTime)
+        {
+            PGClass.SaveLogInfo(new List<object[]>() { new object[] { taskId, "进入批量调用配变负荷方法" } }, GhdwConn);
+            try
+            {
+                List<LoadData> list = new List<LoadData>();
+                int nums = 0;
+                Dictionary<int, long> dicIndex = new Dictionary<int, long>();
+                int count = -1;
+                long xl_oid = 0;
+                Dictionary<int, Dictionary<string, double>> dicResult = new Dictionary<int, Dictionary<string, double>>();
+                foreach (DataRow dataRow in dtFeeder.Rows)
+                {
+                    xl_oid = Convert.ToInt64(dataRow["xl_oid"] == DBNull.Value ? 0 : dataRow["xl_oid"]);
+                    if (xl_oid == 0) continue;
+                    if (dicStatus.ContainsKey(xl_oid)) continue;
+                    dicStatus.Add(xl_oid, 0);
+                    if (dataRow["OBJ_ID"] != DBNull.Value && dataRow["TIME_MAX"] != DBNull.Value)
+                    {
+                        string condition = "cxkg=" + dataRow["xl_cxkg"] + " and cxkglx=" + dataRow["typeid"];
+                        DataRow[] drs = dtTrans.Select(condition);
+                        if (drs.Length > 0)
+                        {
+                            nums = nums + drs.Length;
+                            if (nums >= 450)
+                            {
+                                GetTransLoadBatch(taskId, list, GhdwConn, dwxh, startTime, ref dicResult);
+                                list.Clear();
+                                nums = drs.Length;
+                                //count = -1;
+                            }
+                            LoadData data = GetTransLoadData(drs, sgcode, dataRow["TIME_MAX"].ToString(), deptcode);
+                            if (string.IsNullOrEmpty(data.equipId))
+                            {
+                                nums = nums - drs.Length;
+                                continue;
+                            }
+                            list.Add(data);
+                            count++;
+                            dicIndex.Add(count, xl_oid);
+                            dicResult.Add(count, new Dictionary<string, double>());
+                        }
+                    }
+                    else
+                    {
+                        dicStatus[xl_oid] = 2;
+                    }
+                }
+                if (list.Count > 0)
+                {
+                    GetTransLoadBatch(taskId, list, GhdwConn, dwxh, startTime, ref dicResult);
+                }
+                if (dicResult.Keys.Count != dicIndex.Keys.Count)
+                {
+                    PGClass.SaveLogInfo(new List<object[]>() { new object[] { taskId, "取值数量不匹配：xl--" + dicIndex.Keys.Count + " 负荷数组：" + dicResult.Keys.Count } }, GhdwConn);
+                }
+                for (int i = 0; i < dicResult.Keys.Count; i++)
+                {
+                    try
+                    {
+                        long xl = dicIndex[i];
+                        Dictionary<string, double> dicFh = dicResult[i];
+                        bool b = false;
+                        foreach (var name in dicFh.Keys)
+                        {
+                            b = true;
+                            double value = dicFh[name];
+                            foreach (DataRow dr in dtTrans.Rows)
+                            {
+                                object objId = dr["OBJ_ID"];
+                                if (objId == DBNull.Value) continue;
+                                if (objId.ToString() != name) continue;
+                                dt.Rows.Add(new object[] { dr["oid"], dr["sbzlx"], value, taskId, xl });
+                            }
+                        }
+                        if (!b)
+                        {
+                            dicStatus[xl] = 3;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        PGClass.SaveLogInfo(new List<object[]>() { new object[] { taskId, ex.Message + ex.StackTrace } }, GhdwConn);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                PGClass.SaveLogInfo(new List<object[]>() { new object[] { taskId, "GetLoadData异常" + ex.Message + ex.StackTrace } }, GhdwConn);
+                throw new Exception(ex.StackTrace + Environment.NewLine + ex.Message);
+            }
+            finally
+            {
+                PGClass.SaveLogInfo(new List<object[]>() { new object[] { taskId, "批量配变负荷获取结束" } }, GhdwConn);
+            }
+        }
+        private LoadData GetTransLoadData(DataRow[] drs, string sgcode, string periods, string deptcode)
+        {
+            LoadData loadData = new LoadData();
+            loadData.srvCode = "00000001";
+            loadData.equipType = "0302";
+            loadData.equipId = GetEquipId(drs);
+            loadData.sgcode = sgcode;
+            loadData.funcCode = "01";
+            loadData.periods = periods;
+            loadData.deptcode = deptcode;
+            loadData.type = "01";
+            loadData.serialNo = "FF000000-0000-0050-0000-000000000600-02216";
+            return loadData;
+        }
+        private void GetTransLoadBatch(string taskId, List<LoadData> loadData, Npgsql.NpgsqlConnection GhdwConn, string dwxh, string startTime, ref Dictionary<int, Dictionary<string, double>> dicResult)
+        {
+            string data = "";
+            string redata = "";
+            try
+            {
+                LoadInfo info = new LoadInfo();
+                info.user = "8ad5979d66ec89dd016936e0524b5e07";
+                info.serviceCode = "ele_calc_run_service_zb";//固定值
+                info.data = loadData;
+                data = JsonConvert.SerializeObject(info);
+                var client = new RestClient(ConfigClass.LoadDataIp);
+                client.Timeout = 600000;
+                client.ThrowOnAnyError = true;
+                var request = new RestRequest(Method.POST);
+                request.Timeout = 600000;
+                request.AddParameter("application/json", data, ParameterType.RequestBody);
+                var response = client.Execute(request);
+                redata = response.Content;
+                client.Delete(request);
+                //redata = System.IO.File.ReadAllText(@"C:\Users\lenovo\Desktop\load.txt");  
+                //以上为负荷预测接口调用
+                Dictionary<string, object> ddd = null;
+                try
+                {
+                    ddd = JsonConvert.DeserializeObject<Dictionary<string, object>>(redata);
+                }
+                catch
+                {
+                }
+                if (ddd == null || !ddd.ContainsKey("data"))
+                {
+                    PGClass.SaveLogInfo(new List<object[]>() { new object[] { taskId, "配变负荷查询异常：负荷参数:" + data + Environment.NewLine + "输出值：" + redata } }, GhdwConn);
+                    return;
+                }
+                JArray array = JArray.Parse(ddd["data"].ToString());
+                double value = 0;
+                int index = dicResult.Keys.Count - array.Count;
+                foreach (var a in array)
+                {
+                    Dictionary<string, double> dicChildren = new Dictionary<string, double>();
+                    if (a.HasValues)
+                    {
+                        bool b = false;
+                        foreach (var aa in a.Children())
+                        {
+                            if (aa.HasValues)
+                            {
+                                Dictionary<string, double> arr = null;
+                                try
+                                {
+                                    arr = JsonConvert.DeserializeObject<Dictionary<string, double>>(aa.First.ToString());
+                                }
+                                catch
+                                {
+                                }
+                                if (arr != null && arr.ContainsKey("k_10_7"))
+                                {
+                                    b = true;
+                                    arr.TryGetValue("k_10_7", out value);
+                                    value = Math.Round(value, 2);
+                                    if (!dicChildren.ContainsKey(((JProperty)aa).Name)) dicChildren.Add(((JProperty)aa).Name, value);
+                                }
+                            }
+                        }
+                    }
+                    dicResult[index] = dicChildren;
+                    index++;
+                }
+            }
+            catch (Exception ex)
+            {
+                PGClass.SaveLogInfo(new List<object[]>() { new object[] { taskId, "配变负荷查询异常：负荷参数:" + data + Environment.NewLine + "输出值：" + redata + ex.StackTrace + Environment.NewLine + ex.Message } }, GhdwConn);
+                isSuccess = false;
+                //throw new Exception(ex.StackTrace + Environment.NewLine + ex.Message);
+            }
+        }
+        #endregion
+
+        private void GetTransData(DataRow[] drs, string name, double value, ref DataTable dt, string taskId, long xl_oid)
+        {
+            foreach (DataRow dr in drs)
+            {
+                object objId = dr["OBJ_ID"];
+                if (objId == DBNull.Value) continue;
+                if (objId.ToString() != name) continue;
+                dt.Rows.Add(new object[] { dr["oid"], dr["sbzlx"], value, taskId, xl_oid });
+            }
+        }
+        #endregion
+
+
+        #region 单次获取馈线联络线路的负荷
+        /// <summary>
+        /// 单次获取馈线联络线路的负荷（裕度）
+        /// </summary>
+        /// <param name="dtFeeder"></param>
+        /// <param name="oids">馈线oid，第一个值为当前馈线，后面的值为联络线路的oid</param>
+        /// <param name="sgcode"></param>
+        /// <param name="deptcode"></param>
+        /// <param name="status"></param>
+        /// <param name="m"></param>
+        /// <returns></returns>
+        public Dictionary<long, double> GetFeederLoadData(long xloid, DataTable dtFeeder, List<long> oids, string sgcode, string deptcode, out int status, ref int m, ref DataTable dt_check, string taskId, ref Dictionary<long, int> dicLoadCheckInfo, ref bool isSuccess)
+        {
+            Dictionary<long, double> dic = new Dictionary<long, double>();
+            Dictionary<long, List<object>> dicValues = new Dictionary<long, List<object>>();
+            Dictionary<long, string> dicXlmc = new Dictionary<long, string>();
+            status = 0;
+            try
+            {
+                if (oids == null || oids.Count <= 0)
+                {
+                    return dic;
+                }
+                for (int i = 0; i < oids.Count; i++)
+                {
+                    if (dic.ContainsKey(oids[i])) continue;
+                    dic.Add(oids[i], 0);
+                    dicValues.Add(oids[i], new List<object>() { 0, 0 });
+                }
+                DateTime _starTime = DateTime.Now;
+                TimeSpan timeSpan = TimeSpan.Zero;
+                Dictionary<string, long> dicObj = new Dictionary<string, long>();
+                Dictionary<long, double> dicX = new Dictionary<long, double>();
+                StringBuilder sb = new StringBuilder();
+                string periods = "";
+                long temp_oid = 0;
+                double resXedl = 0;
+                foreach (DataRow item in dtFeeder.Rows)
+                {
+                    object id = item["xl_oid"];
+                    if (id == DBNull.Value) continue;
+                    temp_oid = Convert.ToInt64(id.ToString());
+                    if (temp_oid == 0) continue;
+                    if (!dicXlmc.ContainsKey(temp_oid))
+                        dicXlmc.Add(temp_oid, item["sbmc"].ToString());
+                }
+                foreach (DataRow item in dtFeeder.Rows)
+                {
+                    object id = item["xl_oid"];
+                    if (id == DBNull.Value) continue;
+                    temp_oid = Convert.ToInt64(id.ToString());
+                    if (temp_oid == 0) continue;
+                    if (temp_oid == xloid)
+                    {
+                        periods = item["TIME_MAX"].ToString();
+                        if (string.IsNullOrEmpty(periods))
+                        {
+                            return dic;
+                        }
+                        continue;
+                    }
+                    if (!oids.Contains(temp_oid)) continue;
+                    if (string.IsNullOrEmpty(item["OBJ_ID"].ToString())) continue;
+                    if (!dicObj.ContainsKey(item["OBJ_ID"].ToString()))
+                    {
+                        dicObj.Add(item["OBJ_ID"].ToString(), temp_oid);
+                    }
+                    if (item["XEDL"] == DBNull.Value)
+                    {
+                        if (dicLoadCheckInfo.ContainsKey(xloid)) dicLoadCheckInfo[xloid] = 4;
+                    }
+                    resXedl = item["XEDL"] == DBNull.Value ? 0 : Convert.ToDouble(item["XEDL"].ToString());
+                    if (!dicX.ContainsKey(temp_oid))
+                    {
+                        dicX.Add(temp_oid, resXedl);
+                    }
+                    dic[temp_oid] = resXedl;
+                    List<object> list = dicValues[temp_oid];
+                    list[0] = resXedl;
+                    dicValues[temp_oid] = list;
+                    sb.Append(item["OBJ_ID"].ToString() + ",");
+                }
+                if (sb.Length == 0) return dic;
+                sb.Remove(sb.Length - 1, 1);
+                LoadData loadData = new LoadData();
+                loadData.srvCode = "00000002";
+                loadData.equipType = "0304";
+                loadData.equipId = sb.ToString();
+                loadData.sgcode = sgcode;
+                loadData.funcCode = "01";
+                loadData.periods = periods;
+                loadData.deptcode = deptcode;
+                loadData.type = "01";
+                loadData.serialNo = "FF000000-0000-0050-0000-000000000600-02216";
+                LoadInfo info = new LoadInfo();
+                info.user = "8ad5979d66ec89dd016936e0524b5e07";
+                info.serviceCode = "ele_calc_run_service_zb";//固定值
+                info.data = new List<LoadData>() { loadData };
+                string data = JsonConvert.SerializeObject(info);
+                string redata = "";
+                var client = new RestClient(ConfigClass.LoadDataIp);
+                client.Timeout = 600000;
+                client.ThrowOnAnyError = true;
+                var request = new RestRequest(Method.POST);
+                request.Timeout = 600000;
+                request.AddParameter("application/json", data, ParameterType.RequestBody);
+                var response = client.Execute(request);
+                redata = response.Content;
+                client.Delete(request);
+
+
+                // redata = System.IO.File.ReadAllText(@"C:\Users\lenovo\Desktop\load.txt");
+
+                if (string.IsNullOrEmpty(redata))
+                {
+                    PGClass.SaveLogInfo(new List<object[]>() { new object[] { taskId, "查询结果为空，参数为：" + data } });
+                }
+                Dictionary<string, object> ddd = null;
+                try
+                {
+                    ddd = Newtonsoft.Json.JsonConvert.DeserializeObject<Dictionary<string, object>>(redata);
+                }
+                catch
+                {
+                }
+                if (ddd == null || !ddd.ContainsKey("data"))
+                {
+                    PGClass.SaveLogInfo(new List<object[]>() { new object[] { taskId, "参数：" + data + Environment.NewLine + "查询结果:" + redata } });
+                    return dic;
+                }
+                JArray array = JArray.Parse(ddd["data"].ToString());
+                double value = 0;
+                double xedl = 0;
+                List<FeederLog> logs = new List<FeederLog>();
+                bool b = false;
+                foreach (var a in array)
+                {
+                    if (a.HasValues)
+                    {
+                        foreach (var aa in a.Children())
+                        {
+                            if (aa.HasValues)
+                            {
+                                Dictionary<string, double> arr = null;
+                                try
+                                {
+                                    arr = JsonConvert.DeserializeObject<Dictionary<string, double>>(aa.First.ToString());
+                                }
+                                catch
+                                {
+                                }
+                                if (arr != null && arr.ContainsKey("k_10_4"))
+                                {
+
+                                    b = true;
+                                    arr.TryGetValue("k_10_4", out value);
+                                    value = value * 1000;
+                                    value = Math.Round(value, 2);
+                                    long oid = 0;
+                                    dicObj.TryGetValue(((JProperty)aa).Name, out oid);
+                                    dicX.TryGetValue(oid, out xedl);
+                                    if (oid == 0) continue;
+                                    dic[oid] = (xedl - value) <= 0 ? 0 : (xedl - value);
+                                    List<object> list = dicValues[oid];
+                                    list[1] = value;
+                                    dicValues[oid] = list;
+                                }
+                            }
+                        }
+                    }
+                }
+                if (!b)
+                {
+                    if (dicLoadCheckInfo.ContainsKey(xloid))
+                        dicLoadCheckInfo[xloid] = 5;
+                }
+                timeSpan = DateTime.Now - _starTime;
+                m = m + timeSpan.Milliseconds + timeSpan.Seconds * 1000 + timeSpan.Minutes * 60 * 1000;
+            }
+            catch (Exception ex)
+            {
+                PGClass.SaveLogInfo(new List<object[]>() { new object[] { taskId, "GetFeederLoadData异常：" + ex.Message + ex.StackTrace } });
+                status = -1;
+                isSuccess = false;
+                //throw new Exception(ex.StackTrace + Environment.NewLine + ex.Message);
+            }
+            finally
+            {
+                try
+                {
+
+                    foreach (var item in dicValues.Keys)
+                    {
+                        List<object> values = dicValues[item];
+                        dt_check.Rows.Add(new object[] { Guid.NewGuid().ToString(), xloid, item, values[0], values[1], dicXlmc.ContainsKey(item) ? dicXlmc[item] : null });
+                    }
+                }
+                catch (Exception ex)
+                {
+
+                }
+            }
+            return dic;
+        }
+        #endregion
+
+        private LoadData GetFeederPara(List<string> listoid, string sgcode, string periods, string deptcode)
+        {
+            LoadData loadData = new LoadData();
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < listoid.Count; i++)
+            {
+                if (i == listoid.Count - 1)
+                {
+                    sb.Append(listoid[i]);
+                }
+                else
+                {
+                    sb.Append(listoid[i] + ",");
+                }
+            }
+            loadData.srvCode = "00000002";
+            loadData.equipType = "0304";
+            loadData.equipId = sb.ToString();
+            loadData.sgcode = sgcode;
+            loadData.funcCode = "01";
+            loadData.periods = periods;
+            loadData.deptcode = deptcode;
+            loadData.type = "01";
+            loadData.serialNo = "FF000000-0000-0050-0000-000000000600-02216";
+            return loadData;
+        }
+        public struct FeederInfos
+        {
+            public long oid;//当前线路的oid
+            public string TIME_MAX;//当前线路的最大时刻
+            public object XEDL;//限额电流
+            public object OBJ_ID;//OBJ_ID
+        }
+        public Dictionary<long, Dictionary<long, double>> GetFeederLoadDataBatch(DataTable dtFeeder, Dictionary<long, List<long>> dicFeeders, string sgcode, string deptcode, string taskId, ref DataTable dt_check, string dwxh, string startTime, ref Dictionary<long, int> loadcheckinfo)
+        {
+            DateTime _starTime = DateTime.Now;
+            TimeSpan timeSpan = TimeSpan.Zero;
+            PGClass.SaveLogInfo(new List<object[]>() { new object[] { taskId, "批量馈线负荷开始" } });
+            Dictionary<long, Dictionary<long, double>> dic = new Dictionary<long, Dictionary<long, double>>();
+            try
+            {
+                Dictionary<long, Dictionary<long, List<object>>> dicTempt = new Dictionary<long, Dictionary<long, List<object>>>();
+                if (dicFeeders == null || dicFeeders.Count == 0)
+                {
+                    PGClass.SaveLogInfo(new List<object[]>() { new object[] { taskId, "馈线集合为空或者null：" } });
+                    return dic;
+                }
+                int totalCount = dicFeeders.Count;
+                Dictionary<long, FeederInfos> listInfo = new Dictionary<long, FeederInfos>();
+                Dictionary<int, long> dicIndex = new Dictionary<int, long>();
+                Dictionary<string, long> dicObj = new Dictionary<string, long>();
+                foreach (DataRow item in dtFeeder.Rows)
+                {
+                    long xl_oid = Convert.ToInt64(item["xl_oid"] == DBNull.Value ? 0 : item["xl_oid"]);
+                    FeederInfos info = new FeederInfos();
+                    info.oid = xl_oid;
+                    info.TIME_MAX = item["TIME_MAX"].ToString();
+                    info.XEDL = item["XEDL"];
+                    info.OBJ_ID = item["OBJ_ID"];
+                    listInfo.Add(info.oid, info);
+                    if (item["OBJ_ID"] != DBNull.Value)
+                    {
+                        if (!dicObj.ContainsKey(item["OBJ_ID"].ToString()))
+                            dicObj.Add(item["OBJ_ID"].ToString(), xl_oid);
+                    }
+                }
+                int nums = 0;
+                List<LoadData> loadData = new List<LoadData>();
+                int index = 0;
+                Dictionary<int, bool> dicResult = new Dictionary<int, bool>();
+                Dictionary<int, Dictionary<long, object>> dicRl = new Dictionary<int, Dictionary<long, object>>();
+                foreach (long oid in dicFeeders.Keys)
+                {
+                    List<long> listLlx = dicFeeders[oid];
+                    Dictionary<long, List<object>> dicKV = new Dictionary<long, List<object>>();
+                    Dictionary<long, double> dicReturn = new Dictionary<long, double>();
+                    for (int i = 0; i < listLlx.Count; i++)
+                    {
+                        if (listInfo[listLlx[i]].XEDL == DBNull.Value)
+                        {
+                            if (loadcheckinfo.ContainsKey(oid))
+                                loadcheckinfo[oid] = 4;
+                        }
+                        dicKV.Add(listLlx[i], new List<object>() { listInfo[listLlx[i]].XEDL, 0 });
+                        dicReturn.Add(listLlx[i], Convert.ToInt64(listInfo[listLlx[i]].XEDL == DBNull.Value ? 0 : listInfo[listLlx[i]].XEDL));
+                    }
+                    if (!dicTempt.ContainsKey(oid))
+                        dicTempt.Add(oid, dicKV);
+                    if (!dic.ContainsKey(oid))
+                        dic.Add(oid, dicReturn);
+                    if (listLlx.Count == 0) continue;
+                    if (string.IsNullOrEmpty(listInfo[oid].TIME_MAX)) continue;
+                    nums = nums + listLlx.Count;
+                    if (nums >= 400)
+                    {
+                        GetFeederLoadBatch(sgcode, deptcode, taskId, loadData, dwxh, startTime, dicObj, ref dicResult, ref dicRl);
+                        loadData.Clear();
+                        nums = listLlx.Count;
+                    }
+                    List<string> listObj = new List<string>();
+                    for (int i = 0; i < listLlx.Count; i++)
+                    {
+                        string objId = listInfo[listLlx[i]].OBJ_ID.ToString();
+                        if (!string.IsNullOrEmpty(objId)) listObj.Add(objId);
+                    }
+                    if (listObj.Count == 0) continue;
+                    LoadData data = GetFeederPara(listObj, sgcode, listInfo[oid].TIME_MAX, deptcode);
+                    if (string.IsNullOrEmpty(data.equipId))
+                    {
+                        nums = nums - listLlx.Count;
+                        continue;
+                    }
+                    loadData.Add(data);
+                    dicIndex.Add(index, oid);
+                    dicResult.Add(index, false);
+                    dicRl.Add(index, new Dictionary<long, object>());
+                    index++;
+                }
+                if (loadData.Count > 0)
+                    GetFeederLoadBatch(sgcode, deptcode, taskId, loadData, dwxh, startTime, dicObj, ref dicResult, ref dicRl);
+                //1、给loadcheckinfo赋值
+                //2、dt_check赋值
+                //3、dic赋值  
+                for (int i = 0; i < dicResult.Keys.Count; i++)
+                {
+                    long xl = dicIndex[i];
+                    Dictionary<long, object> dicRlValue = dicRl[i];//关联线路id和负荷值
+                    bool b = dicResult[i];
+                    Dictionary<long, List<object>> values = dicTempt[xl];
+                    if (!b)
+                    {
+                        loadcheckinfo[xl] = 5;
+                    }
+                    Dictionary<long, double> pairs = new Dictionary<long, double>();
+                    foreach (var item in dicRlValue.Keys)
+                    {
+                        List<object> listVal = values[item];
+                        double rl = Convert.ToDouble(listVal[0] == DBNull.Value ? 0 : listVal[0]);
+                        double fh = Convert.ToDouble(dicRlValue[item] == DBNull.Value ? 0 : dicRlValue[item]);
+                        double sum = (rl - fh) < 0 ? 0 : (rl - fh);
+                        pairs.Add(item, sum);
+                        dt_check.Rows.Add(new object[] { Guid.NewGuid().ToString(), xl, item, rl, fh });
+                    }
+                    dic[xl] = pairs;
+                }
+                timeSpan = DateTime.Now - _starTime;
+                PGClass.SaveLogInfo(new List<object[]>() { new object[] { taskId, string.Format("获取线路联络线路LOAD，共耗时{0}分{1}秒{2}毫秒", timeSpan.Minutes, timeSpan.Seconds, timeSpan.Milliseconds) } });
+            }
+            catch (Exception ex)
+            {
+                PGClass.SaveLogInfo(new List<object[]>() { new object[] { taskId, "获取线路联络线路LOAD异常：" + ex.Message } });
+            }
+            return dic;
+        }
+        private void GetFeederLoadBatch(string sgcode, string deptcode, string taskId, List<LoadData> loadData, string dwxh, string startTime, Dictionary<string, long> dicObj, ref Dictionary<int, bool> dicResult, ref Dictionary<int, Dictionary<long, object>> dicRl)
+        {
+            string data = "";
+            string redata = "";
+            try
+            {
+                PGClass.SaveLogInfo(new List<object[]>() { new object[] { taskId, "进入馈线负荷批量调用方法" } });
+                LoadInfo info = new LoadInfo();
+                info.user = "8ad5979d66ec89dd016936e0524b5e07";
+                info.serviceCode = "ele_calc_run_service_zb";//固定值
+                info.data = loadData;
+                data = JsonConvert.SerializeObject(info);
+                PGClass.SaveLogInfo(new List<object[]>() { new object[] { taskId, "参数：" + data } });
+                var client = new RestClient(ConfigClass.LoadDataIp);
+                client.Timeout = 600000;
+                client.ThrowOnAnyError = true;
+                var request = new RestRequest(Method.POST);
+
+                request.Timeout = 600000;
+                request.AddParameter("application/json", data, ParameterType.RequestBody);
+                var response = client.Execute(request);
+                redata = response.Content;
+                client.Delete(request);
+                //redata = System.IO.File.ReadAllText(@"C:\Users\lenovo\Desktop\345633.txt");
+                PGClass.SaveLogInfo(new List<object[]>() { new object[] { taskId, "参数：" + data + Environment.NewLine + "查询结果:" + redata } });
+                if (string.IsNullOrEmpty(redata))
+                {
+                    PGClass.SaveLogInfo(new List<object[]>() { new object[] { taskId, "查询结果为空，参数为：" + data } });
+                }
+                Dictionary<string, object> ddd = null;
+                try
+                {
+                    ddd = JsonConvert.DeserializeObject<Dictionary<string, object>>(redata);
+                }
+                catch
+                {
+                }
+                if (ddd == null || !ddd.ContainsKey("data"))
+                {
+                    PGClass.SaveLogInfo(new List<object[]>() { new object[] { taskId, "参数：" + data + Environment.NewLine + "查询结果:" + redata } });
+                    return;
+                }
+                JArray array = JArray.Parse(ddd["data"].ToString());
+                double value = 0;
+                double xedl = 0;
+                List<FeederLog> logs = new List<FeederLog>();
+                int index = dicResult.Keys.Count - array.Count;
+                foreach (var item in array)
+                {
+                    var a = item;
+                    Dictionary<string, double> dicFh = new Dictionary<string, double>();
+                    Dictionary<long, object> dicValue = new Dictionary<long, object>();
+                    bool b = false;
+                    if (a.HasValues)
+                    {
+                        foreach (var aa in a.Children())
+                        {
+                            if (aa.HasValues)
+                            {
+                                Dictionary<string, double> arr = null;
+                                try
+                                {
+                                    arr = JsonConvert.DeserializeObject<Dictionary<string, double>>(aa.First.ToString());
+                                }
+                                catch
+                                {
+                                }
+                                if (arr == null || !arr.ContainsKey("k_10_4")) continue;
+                                b = true;
+                                arr.TryGetValue("k_10_4", out value);
+                                value = value * 1000;
+                                value = Math.Round(value, 2);
+                                if (!dicFh.ContainsKey(((JProperty)aa).Name))
+                                    dicFh.Add(((JProperty)aa).Name, value);
+                                long oid = 0;
+                                dicObj.TryGetValue(((JProperty)aa).Name, out oid);
+                                if (oid == 0) continue;
+                                if (!dicValue.ContainsKey(oid))
+                                    dicValue.Add(oid, value);
+                            }
+                        }
+                    }
+                    dicResult[index] = b;
+                    dicRl[index] = dicValue;
+                    index++;
+                }
+                PGClass.SaveLogInfo(new List<object[]>() { new object[] { taskId, "馈线负荷批量调用方法结束" } });
+            }
+            catch (Exception ex)
+            {
+                PGClass.SaveLogInfo(new List<object[]>() { new object[] { taskId, "馈线负荷查询异常：负荷参数:" + data + Environment.NewLine + "输出值：" + redata + ex.Message + Environment.NewLine + ex.StackTrace } });
+                isSuccess = false;
+                //throw new Exception(ex.StackTrace + Environment.NewLine + ex.Message);
+            }
+            return;
+        }
+        /// <summary>
+        /// 根据条件筛选并返回表
+        /// </summary>
+        /// <param name="dt">原始表</param>
+        /// <param name="condition">条件</param>
+        /// <returns></returns>
+        private static DataTable GetTableByCondition(DataTable dt, string condition)
+        {
+            DataRow[] dr = dt.Select(condition);
+            return dr.Length == 0 ? dt.Clone() : dr.CopyToDataTable();
+        }
+        //dtResult.Columns["oid"].ColumnName = "mx_id";
+        //string s = "";
+
+        //string url = ConfigClass.ServerDataIp + JsonConvert.SerializeObject(paraInfo) + ConfigClass.TopoQueryCondition;
+        //var client = new RestClient(url);
+        //client.Timeout = 600000;
+        //client.ThrowOnAnyError = true;
+        //var request = new RestRequest();
+        //request.Timeout = 600000;
+        //RestResponse response = (RestResponse)client.Execute(request);
+        //if (response.Content == null) return ConfigClass.TopoCondition;
+        //ResultValueInfo resInfo = null;
+        //try
+        //{
+        //    resInfo = JsonConvert.DeserializeObject<ResultValueInfo>(response.Content);
+        //}
+        //catch
+        //{
+        //    PGClass.SaveLogInfo(new List<object[]>() { new object[] { taskId, "拓扑接口查询异常，url：" + url } }, GhdwConn);
+        //    if (status) listStatus.Add(TaskClass.GetErrorInfo(taskId, sg_code, dwxh, callLoad, startTime));
+        //    status = false;
+        //}
+        //StringBuilder sb360000 = new StringBuilder();
+        //StringBuilder sb305000 = new StringBuilder();
+        //StringBuilder sb306000 = new StringBuilder();
+        //StringBuilder sb307000 = new StringBuilder();
+        //StringBuilder sb311000 = new StringBuilder();
+        //StringBuilder sb390000 = new StringBuilder();
+        //StringBuilder sb322000 = new StringBuilder();
+        //StringBuilder sb309000 = new StringBuilder();
+        //if (resInfo.stopequips != null)
+        //{
+        //    foreach (DeviceInfo item in resInfo.stopequips)
+        //    {
+        //        if (item.oid == 0 || item.typeid == 0)
+        //            continue;
+        //        AppendStr(ref sb360000, ref sb305000, ref sb306000, ref sb307000, ref sb311000, ref sb390000, ref sb322000, ref sb309000, item);
+        //    }
+        //}
+        //if (resInfo.lastequips != null)
+        //{
+        //    foreach (DeviceInfo item in resInfo.lastequips)
+        //    {
+        //        if (item.oid == 0 || item.typeid == 0)
+        //            continue;
+        //        AppendStr(ref sb360000, ref sb305000, ref sb306000, ref sb307000, ref sb311000, ref sb390000, ref sb322000, ref sb309000, item);
+        //    }
+        //}
+        //if (resInfo.otherequips != null)
+        //{
+        //    foreach (DeviceInfo item in resInfo.otherequips)
+        //    {
+        //        if (item.oid == 0 || item.typeid == 0)
+        //            continue;
+        //        AppendStr(ref sb360000, ref sb305000, ref sb306000, ref sb307000, ref sb311000, ref sb390000, ref sb322000, ref sb309000, item);
+        //    }
+        //}
+        //if (sb360000.Length > 0)
+        //{
+        //    sb360000 = sb360000.Remove(sb360000.Length - 1, 1);
+        //    DataTable dt360000 = PGClass.QueryNpgDatabase(GhdwConn, string.Format(ConfigClass.Topo_Query360000, parameter, sb360000.ToString()));
+        //}
+        //if (sb305000.Length > 0)
+        //{
+        //    sb305000 = sb305000.Remove(sb305000.Length - 1, 1);
+        //    DataTable dt305000 = PGClass.QueryNpgDatabase(GhdwConn, string.Format(ConfigClass.Topo_Query305000, parameter, sb305000.ToString()));
+        //}
+        //if (sb306000.Length > 0)
+        //{
+        //    sb306000 = sb306000.Remove(sb306000.Length - 1, 1);
+        //    DataTable dt306000 = PGClass.QueryNpgDatabase(GhdwConn, string.Format(ConfigClass.Topo_Querysb306000, parameter, sb306000.ToString()));
+        //}
+        //if (sb307000.Length > 0)
+        //{
+        //    sb307000 = sb307000.Remove(sb307000.Length - 1, 1);
+        //    DataTable dt307000 = PGClass.QueryNpgDatabase(GhdwConn, string.Format(ConfigClass.Topo_Query307000, parameter, sb307000.ToString()));
+        //}
+        //if (sb311000.Length > 0)
+        //{
+        //    sb311000 = sb311000.Remove(sb311000.Length - 1, 1);
+        //    DataTable dt311000 = PGClass.QueryNpgDatabase(GhdwConn, string.Format(ConfigClass.Topo_Query311000, parameter, sb311000.ToString()));
+
+        //}
+        //if (sb390000.Length > 0)
+        //{
+        //    sb390000 = sb390000.Remove(sb390000.Length - 1, 1);
+        //    DataTable dt390000 = PGClass.QueryNpgDatabase(GhdwConn, string.Format(ConfigClass.Topo_Query390000, parameter, sb390000.ToString()));
+        //}
+        //if (sb322000.Length > 0)
+        //{
+        //    sb322000 = sb322000.Remove(sb322000.Length - 1, 1);
+        //    DataTable dt322000 = PGClass.QueryNpgDatabase(GhdwConn, string.Format(ConfigClass.Topo_Query322000, parameter, sb322000.ToString()));
+        //}
+        //if (sb309000.Length > 0)
+        //{
+        //    sb309000 = sb309000.Remove(sb309000.Length - 1, 1);
+        //    DataTable dt309000 = PGClass.QueryNpgDatabase(GhdwConn, string.Format(ConfigClass.Topo_Query309000, parameter, sb309000.ToString()));
+        //}
+
+
+
+
+        // string condition = "&condition=(sbtype = 311000 and fsbzlx in (30000000)) or(sbtype = 360000 and oid in ({0}) )";
+        //DataTable dt = new DataTable();
+        // StringBuilder sbStr = new StringBuilder();
+        //foreach (DataRow item in dt.Rows)
+        //{
+        //    sbStr.Append(item["oid"]);
+        //}
+        //if (sbStr.Length > 0)
+        //{
+        //    sbStr = sbStr.Remove(sbStr.Length - 1, 1);
+        //    sbStr.Append("&topoState=3");
+        //}
+        //else { return ConfigClass.TopoCondition; }
+        //return string.Format(condition, sbStr.ToString());
+        private static void AppendStr(ref StringBuilder sb360000, ref StringBuilder sb305000, ref StringBuilder sb306000, ref StringBuilder sb307000, ref StringBuilder sb311000, ref StringBuilder sb390000, ref StringBuilder sb322000, ref StringBuilder sb309000, DeviceInfo item)
+        {
+            switch (item.typeid)
+            {
+                case 360000:
+                    sb360000.Append(item.oid + ",");
+                    break;
+                case 305000:
+                    sb305000.Append(item.oid + ",");
+                    break;
+                case 306000:
+                    sb306000.Append(item.oid + ",");
+                    break;
+                case 307000:
+                    sb307000.Append(item.oid + ",");
+                    break;
+                case 311000:
+                    sb311000.Append(item.oid + ",");
+                    break;
+                case 390000:
+                    sb390000.Append(item.oid + ",");
+                    break;
+                case 322000:
+                    sb322000.Append(item.oid + ",");
+                    break;
+                case 309000:
+                    sb309000.Append(item.oid + ",");
+                    break;
+                default:
+                    break;
+            }
+        }
+        private string GetConditionString(List<long> list)
+        {
+            string condition = "&condition=((sbtype =311000 and fsbzlx in (30000000)) {0}) &topoState=3";
+            string str = "or (sbtype = 360000 and oid in ({0}))";
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < list.Count; i++)
+            {
+                if (i == list.Count - 1)
+                    sb.Append(list[i]);
+                else
+                    sb.Append(list[i] + ",");
+            }
+            return string.Format(condition, string.Format(str, sb.ToString()));
+        } 
+        private DataTable GetDataTableByPara1(DataTable dtpara_Feeder, ref DataTable dtErr, Npgsql.NpgsqlConnection GhdwConn, ref Dictionary<long, List<long>> dicTL, Dictionary<long, List<long>> cxkg_mx_oids)
+        {
+            DataTable dt = new DataTable();
+            try
+            {
+                dt.Columns.Add("oid", typeof(long));
+                dt.Columns.Add("equips", typeof(string));
+                dt.Columns.Add("typeid", typeof(long));
+                dt.Columns.Add("cxkg", typeof(long));
+                dt.Columns.Add("cxkglx", typeof(long));
+                List<DeviceInfo> listInfo = new List<DeviceInfo>();
+                List<object> listOid = new List<object>();
+                string url = "";
+                DeviceInfo devInfo;
+                if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                    ConfigClass.ServerDataIp = " http://172.16.144.246/mygisserver/?request=SearchByCondition&equipparams=";//运行时注释掉 
+                List<string> cxkg_lx = new List<string>();
+                Dictionary<string, long> dic_cxkg_lx = new Dictionary<string, long>();
+                long sbzlx = 0;
+                long xl_oid = 0;
+                long cxkgRes = 0;
+                long cxkglxRes = 0;
+                long rows = 0;
+                DataTable dtpara_Sub = dtpara_Feeder.Copy();
+                for (int i = 0; i < dtpara_Sub.Rows.Count; i++)
+                {
+                    xl_oid = Convert.ToInt64(dtpara_Sub.Rows[i]["xl_oid"] == DBNull.Value ? "0" : dtpara_Sub.Rows[i]["xl_oid"].ToString());
+                    sbzlx = Convert.ToInt64(dtpara_Sub.Rows[i]["sbzlx"] == DBNull.Value ? "0" : dtpara_Sub.Rows[i]["sbzlx"].ToString());
+                    cxkgRes = Convert.ToInt64(dtpara_Sub.Rows[i]["xl_cxkg"] == DBNull.Value ? "0" : dtpara_Sub.Rows[i]["xl_cxkg"].ToString());
+                    if (cxkgRes == 0)
+                    {
+                        dtErr.Rows.Add(new object[] { xl_oid, task_id, cxkglxRes, cxkgRes, sbzlx, 5, 1 });
+                        dtpara_Sub.Rows.Remove(dtpara_Sub.Rows[i]);
+                        i--;
+                        continue;
+                    }
+                    cxkglxRes = Convert.ToInt64(dtpara_Sub.Rows[i]["xl_cxkglx"] == DBNull.Value ? "0" : dtpara_Sub.Rows[i]["xl_cxkglx"].ToString());
+                    if (cxkglxRes == 0)
+                    {
+                        dtErr.Rows.Add(new object[] { xl_oid, task_id, cxkglxRes, cxkgRes, sbzlx, 6, 1 });
+                        dtpara_Sub.Rows.Remove(dtpara_Sub.Rows[i]);
+                        i--;
+                        continue;
+                    }
+                    rows = Convert.ToInt64(dtpara_Sub.Rows[i]["rows"] == DBNull.Value ? "0" : dtpara_Sub.Rows[i]["rows"].ToString());
+                    if (rows == 0 || rows == 2)
+                    {
+                        dtErr.Rows.Add(new object[] { xl_oid, task_id, cxkglxRes, cxkgRes, sbzlx, 1, 1 });
+                        dtpara_Sub.Rows.Remove(dtpara_Sub.Rows[i]);
+                        i--;
+                        continue;
+                    }
+                    if (!dic_cxkg_lx.ContainsKey(dtpara_Sub.Rows[i]["xl_cxkg"].ToString() + dtpara_Sub.Rows[i]["typeid"]))
+                    {
+                        dic_cxkg_lx.Add(dtpara_Sub.Rows[i]["xl_cxkg"].ToString() + dtpara_Sub.Rows[i]["typeid"], xl_oid);
+                    }
+                    cxkg_lx.Add(dtpara_Sub.Rows[i]["xl_cxkg"].ToString() + dtpara_Sub.Rows[i]["typeid"]);
+                }
+                bool status = true;
+                bool status1 = true;
+                long cxkglx = 0;
+                List<long> listComplete = new List<long>();
+                foreach (DataRow drpara in dtpara_Sub.Rows)
+                {
+                    try
+                    {
+                        if (drpara["xl_cxkg"] == DBNull.Value || drpara["xl_cxkglx"] == DBNull.Value || drpara["typeid"] == DBNull.Value) continue;
+                        if (listOid.Contains(drpara["xl_cxkg"])) continue;
+                        listOid.Add(drpara["xl_cxkg"]);
+                        devInfo = new DeviceInfo();
+                        devInfo.typeid = Convert.ToInt64(drpara["typeid"] == DBNull.Value ? "0" : drpara["typeid"].ToString());
+                        devInfo.oid = Convert.ToInt64(drpara["xl_cxkg"] == DBNull.Value ? "0" : drpara["xl_cxkg"].ToString());
+                        xl_oid = Convert.ToInt64(drpara["xl_oid"] == DBNull.Value ? "0" : drpara["xl_oid"].ToString());
+                        if (listComplete.Contains(xl_oid))
+                        {
+                            continue;
+                        }
+                        cxkglx = Convert.ToInt64(drpara["xl_cxkglx"] == DBNull.Value ? "0" : drpara["xl_cxkglx"].ToString());
+                        listInfo.Add(devInfo);
+                        ParaInfo paraInfo = new ParaInfo();
+                        paraInfo.equip = new List<DeviceInfo>() { devInfo };
+                        url = ConfigClass.ServerDataIp + JsonConvert.SerializeObject(paraInfo) + ConfigClass.TopoCondition;
+                        if (cxkg_mx_oids.ContainsKey(xl_oid))
+                        {
+                            url = ConfigClass.ServerDataIp + JsonConvert.SerializeObject(paraInfo) + GetConditionString(cxkg_mx_oids[xl_oid]);
+                        }
+                        var client = new RestClient(url);
+                        client.Timeout = 600000;
+                        client.ThrowOnAnyError = true;
+                        var request = new RestRequest();
+                        request.Timeout = 600000;
+                        RestResponse response = (RestResponse)client.Execute(request);
+                        if (response.Content == null) continue;
+                        ResultValueInfo resInfo = null;
+                        try
+                        {
+                            resInfo = JsonConvert.DeserializeObject<ResultValueInfo>(response.Content);
+                        }
+                        catch
+                        {
+                            PGClass.SaveLogInfo(new List<object[]>() { new object[] { task_id, "拓扑接口查询异常，url：" + url } }, GhdwConn);
+                            if (status) isSuccess = false;
+                            status = false;
+                        }
+                        client.Delete(request);
+                        if (resInfo == null) continue;
+                        //last 末端设备
+                        //stop断开设备
+                        //other中间设备 
+                        if (resInfo.stopequips != null)
+                        {
+                            foreach (DeviceInfo item in resInfo.stopequips)
+                            {
+                                if (item.oid == 0 || item.typeid == 0)
+                                    continue;
+                                dt.Rows.Add(new object[] { item.oid, "stopequips", item.typeid, devInfo.oid, devInfo.typeid });
+                            }
+                        }
+                        if (resInfo.lastequips != null)
+                        {
+                            foreach (DeviceInfo item in resInfo.lastequips)
+                            {
+                                if (item.oid == 0 || item.typeid == 0)
+                                    continue;
+                                dt.Rows.Add(new object[] { item.oid, "lastequips", item.typeid, devInfo.oid, devInfo.typeid });
+                            }
+                        }
+                        if (resInfo.otherequips != null)
+                        {
+                            foreach (DeviceInfo item in resInfo.otherequips)
+                            {
+                                if (item.oid == 0 || item.typeid == 0)
+                                    continue;
+                                if (item.oid != devInfo.oid || item.typeid != devInfo.typeid)
+                                {
+                                    if (cxkg_lx.Contains(item.oid + "" + item.typeid))
+                                    {
+                                        long a = 0;
+                                        dic_cxkg_lx.TryGetValue(item.oid + "" + item.typeid, out a);
+                                        listComplete.Add(a);
+                                        if (dicTL.ContainsKey(xl_oid))
+                                        {
+                                            List<long> list_oid = dicTL[xl_oid];
+                                            if (!list_oid.Contains(a))
+                                            {
+                                                list_oid.Add(a);
+                                            }
+                                            dicTL[xl_oid] = list_oid;
+                                        }
+                                        else
+                                        {
+                                            dicTL.Add(xl_oid, new List<long>() { a });
+                                        }
+                                    }
+                                }
+                                dt.Rows.Add(new object[] { item.oid, "otherequips", item.typeid, devInfo.oid, devInfo.typeid });
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        PGClass.SaveLogInfo(new List<object[]>() { new object[] { task_id, "url查询异常，url：" + url + ex.Message + ex.StackTrace } }, GhdwConn);
+                        if (status1) isSuccess = false;
+                        status1 = false;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                PGClass.SaveLogInfo(new List<object[]>() { new object[] { task_id, "GetDataTableByPara1：" + ex.Message + ex.StackTrace } }, GhdwConn);
+            }
+            return dt;
+        }
+        /// <summary>
+        /// 获取topo丢失信息
+        /// </summary>
+        public string GetrTopoLossInfo(DataTable dt_pg_mxh, DataTable dtTempt, ref Dictionary<long, List<long>> listTL, Dictionary<long, List<long>> cxkg_mx_oids, long oid)
+        {
+            string message = "";
+            Npgsql.NpgsqlConnection GhdwConn = null;
+            OracleConnection oracleConn = null;
+            DataTable dtErr = DataTableClass.CreateErrFeederTable();
+            try
+            {
+                DataTable dt = new DataTable();
+                #region 数据库启动连接 
+                PGGhdwConn pggh = new PGGhdwConn();
+                GhdwConn = pggh.conn;
+                OracleConn oracle = new OracleConn();
+                oracleConn = oracle.conn;
+                #endregion
+                #region 创建临时表 
+                //创建临时表 PG: topo_sb_line_oid
+                PGClass.CreateTempTable(GhdwConn, ConfigClass.PG_CreateTempTable);
+                //创建临时表 PG: topo_pdss
+                // PG.PGClass.CreateTempTable(GhdwConn, ConfigClass.PG_CreateTempTablePdss);
+                //创建临时表Oracle: topo_sb_line_sbid
+                OracleClass.CreateTempTable(oracleConn);
+                #endregion 
+                #region 拓扑接口  
+                dtTempt = GetTableByCondition(dtTempt, "xl_oid=" + oid);
+                dt_pg_mxh.Clear();
+
+
+                string kgztSql = GetKGZTSql(dtTempt);
+                if (!string.IsNullOrEmpty(kgztSql))
+                {
+                    DataTable dtKgzt = PGClass.QueryNpgDatabase(GhdwConn, kgztSql,new List<object>());//需要个别单独处理
+                    dtKgzt = DataTableClass.Distinct(dtKgzt, "oid", "sbzlx");
+                    dtTempt = DataTableClass.OperateLeftJoin(dtTempt, dtKgzt, new List<string>() { "xl_cxkg", "xl_cxkglx" }, new List<string>() { "oid", "sbzlx" });//拼接  
+                    for (int i = 0; i < dtTempt.Rows.Count; i++)
+                    {
+                        if (dtTempt.Rows[i]["kgzt"] == DBNull.Value)
+                        {
+                            dtTempt.Rows[i]["kgzt"] = 1;
+                        }
+                    }
+                    dtTempt.DefaultView.Sort = "kgzt desc";
+                    dtTempt = dtTempt.DefaultView.ToTable();
+                }
+                dt = GetDataTableByPara1(dtTempt, ref dtErr, GhdwConn, ref listTL, cxkg_mx_oids);
+                if (dt.Rows.Count == 0)
+                {
+                    return "";
+                }
+                dt = DataTableClass.OperateLeftJoin(dt, dtTempt.DefaultView.ToTable(false, new string[] { "typeid", "xl_cxkg", "sbdydj", "xl_oid" }), new List<string>() { "cxkg", "cxkglx" }, new List<string>() { "xl_cxkg", "typeid" }).DefaultView.ToTable(false, new string[] { "oid", "equips", "typeid", "cxkg", "cxkglx", "sbdydj", "xl_oid" });
+                dt.Columns["sbdydj"].ColumnName = "dydj";
+                PG.PGClass.CreateTempTable(GhdwConn, ConfigClass.PG_ClearTempTable);
+                PG.PGClass.WriteToServer(dt, "topo_sb_line_oid", GhdwConn);
+                #endregion
+                #region 馈线   
+                dt_pg_mxh = DataTableClass.Distinct(dt_pg_mxh, "cxkg", "cxkglx");
+                dt_pg_mxh = GetTableByCondition(dt_pg_mxh, "typeid=311000");
+                dt_pg_mxh.Columns["oid"].ColumnName = "mx_id";
+                dt_pg_mxh.Columns.Remove("typeid");
+                Oracle.OracleClass.ContrastTableAndWrite(dtTempt, oracleConn, ConfigClass.dicContrastOracleTempTable, "topo_sb_line_sbid");
+                DataTable dt_Oracle_Feeder = Oracle.OracleClass.QueryOracleDatabase(ConfigClass.Oracle_QueryFeederSql, new List<object>() { dept_code, loadTime }, oracleConn);//查询oracle馈线   
+                dt_Oracle_Feeder = DataTableClass.Distinct(dt_Oracle_Feeder, "ssdkx");                                                                                                                                     //DataTable dtResult_Feeder1 = DataTableClass.JoinTable(dtTempt, dt_pg_mxh, new List<string>() { "xl_cxkg", "xl_cxkglx" }, new List<string>() { "cxkg", "cxkglx" });//拼接  
+                DataTable dtResult_Feeder = DataTableClass.OperateLeftJoin(dtTempt, dt_pg_mxh, new List<string>() { "xl_cxkg", "typeid" }, new List<string>() { "cxkg", "cxkglx" });//拼接  
+                dtResult_Feeder = DataTableClass.OperateLeftJoin(dtResult_Feeder, dt_Oracle_Feeder, new List<string>() { "sbid" }, new List<string>() { "ssdkx" }); //拼接   
+                #endregion 
+                #region 线段信息    
+                DataTable dtZWSB = PGClass.QueryNpgDatabase(GhdwConn, ConfigClass.PG_Query_ZWSB, new List<object>() { parameter });
+                Oracle.OracleClass.ExecuteNoneQuery(ConfigClass.Oracle_ClearTempTable, oracleConn); //清空oracle临时表将dt_PG_CXXDXX插入临时表中（devicetype sbid）
+                Oracle.OracleClass.ContrastTableAndWrite(GetTableByCondition(dtZWSB, "type='中压架空' or type='中压电缆'"), oracleConn, ConfigClass.dicContrastOracleTempTableXDXX, "topo_sb_line_sbid");
+                DataTable dt_Oracle_CXXDXX = Oracle.OracleClass.QueryOracleDatabase(ConfigClass.Oracle_Query_XDDA, new List<object>() { dept_code }, oracleConn);
+                DataTable dtResult_XD = DataTableClass.OperateLeftJoin(GetTableByCondition(dtZWSB, "devicetype=2"), dt_Oracle_CXXDXX, new List<string>() { "sbid" }, new List<string>() { "DWZY_ID" });//拼接 
+                #endregion
+                #region 配电设施  
+                DataTable dt_PG_PDBYQ = PG.PGClass.QueryNpgDatabase(GhdwConn, ConfigClass.PG_Query_PDBYQ, new List<object>() { parameter });//配电变压器
+                dt_PG_PDBYQ.Columns.Add("blackname", typeof(string));
+                //DataTable dt_PG_ZSBYQ = PG.PGClass.QueryNpgDatabase(GhdwConn, string.Format(ConfigClass.PG_Query_ZSBYQ, parameter));//柱上变压器
+                dt_PG_PDBYQ.Merge(GetTableByCondition(dtZWSB, "devicetype=5"), false, MissingSchemaAction.Ignore);
+                dtResult_XD.Merge(GetTableByCondition(dt_PG_PDBYQ, "end_conn>0"), false, MissingSchemaAction.Ignore);
+                #endregion
+                DataTable dt_PG_ZWZSGLKG = PG.PGClass.QueryNpgDatabase(GhdwConn, ConfigClass.PG_Query_ZWZSGLKG, new List<object>() { parameter });//柱上隔离开关  
+                DataTable dt_PG_ZWZSRDQ = PG.PGClass.QueryNpgDatabase(GhdwConn, ConfigClass.PG_Query_ZWZSRDQ, new List<object>() { parameter });//柱上熔断器   
+                DataTable dt_PG_ZNLJX = PG.PGClass.QueryNpgDatabase(GhdwConn, ConfigClass.PG_Query_ZNLJX, new List<object>() { parameter });//站内连接线 360000   
+                DataTable dt_PG_ZNGLKG = PG.PGClass.QueryNpgDatabase(GhdwConn, ConfigClass.PG_Query_ZNGLKG, new List<object>() { parameter });//站内隔离开关   
+                DataTable dt_PG_ZNRDQ = PG.PGClass.QueryNpgDatabase(GhdwConn, ConfigClass.PG_Query_ZNRDQ, new List<object>() { parameter });//站内熔断器  
+                DataTable dt_PG_ZNDLQ = PG.PGClass.QueryNpgDatabase(GhdwConn, ConfigClass.PG_Query_ZNDLQ, new List<object>() { parameter });//站内断路器  
+                DataTable dt_PG_ZNFHKG = PG.PGClass.QueryNpgDatabase(GhdwConn, ConfigClass.PG_Query_ZNFHKG, new List<object>() { parameter });//站内负荷开关  
+                DataTable dt_PG_ZNDL = PG.PGClass.QueryNpgDatabase(GhdwConn, ConfigClass.PG_Query_ZNDL, new List<object>() { parameter });//站内电缆   
+                DataTable dt_PG_ZNQTSB = PG.PGClass.QueryNpgDatabase(GhdwConn, ConfigClass.PG_Query_ZNQTSB, new List<object>() { parameter });//站内其他设备  
+                dtResult_XD.Merge(GetTableByCondition(dt_PG_ZWZSGLKG, "end_conn>0"), false, MissingSchemaAction.Ignore);
+                dtResult_XD.Merge(GetTableByCondition(dt_PG_ZWZSRDQ, "end_conn>0"), false, MissingSchemaAction.Ignore);
+                dtResult_XD.Merge(GetTableByCondition(dt_PG_ZNLJX, "end_conn>0"), false, MissingSchemaAction.Ignore);
+                dtResult_XD.Merge(GetTableByCondition(dt_PG_ZNGLKG, "end_conn>0"), false, MissingSchemaAction.Ignore);
+                dtResult_XD.Merge(GetTableByCondition(dt_PG_ZNRDQ, "end_conn>0"), false, MissingSchemaAction.Ignore);
+                dtResult_XD.Merge(GetTableByCondition(dt_PG_ZNDLQ, "devicetype=2"), false, MissingSchemaAction.Ignore);
+                dtResult_XD.Merge(GetTableByCondition(dt_PG_ZNFHKG, "devicetype=2"), false, MissingSchemaAction.Ignore);
+                dtResult_XD.Merge(GetTableByCondition(dt_PG_ZNDL, "end_conn>0"), false, MissingSchemaAction.Ignore);
+                dtResult_XD.Merge(GetTableByCondition(dt_PG_ZNQTSB, "end_conn>0"), false, MissingSchemaAction.Ignore);
+                dtResult_XD.Columns.Add("ssdz", typeof(long));
+                StringBuilder sb = new StringBuilder();
+                GetLossInfo(dt, dtResult_XD, 101000, oid, ref sb, "DXD导线段");
+                GetLossInfo(dt, dtResult_XD, 201000, oid, ref sb, "DLD电缆段");
+                GetLossInfo(dt, dtResult_XD, 140000, oid, ref sb, "ZWCLJX站外超连接线");
+                GetLossInfo(dt, dtResult_XD, 130000, oid, ref sb, "ZWLJS站外连接线");
+                GetLossInfo(dt, dt_PG_ZWZSGLKG, 113000, oid, ref sb, "ZSGLKG柱上隔离开关");
+                GetLossInfo(dt, dt_PG_ZWZSRDQ, 115000, oid, ref sb, "ZSRDQ柱上熔断器");
+                GetLossInfo(dt, dt_PG_ZNLJX, 360000, oid, ref sb, "ZNLJX站内连接线");
+                GetLossInfo(dt, dt_PG_ZNGLKG, 306000, oid, ref sb, "ZNGLKG站内隔离开关");
+                GetLossInfo(dt, dt_PG_ZNRDQ, 309000, oid, ref sb, "ZNRDQ站内熔断器");
+                GetLossInfo(dt, dt_PG_ZNDLQ, 305000, oid, ref sb, "ZNDLQ站内断路器");
+                GetLossInfo(dt, dt_PG_ZNDL, 322000, oid, ref sb, "ZNDL站内电缆");
+                GetLossInfo(dt, dt_PG_ZNFHKG, 307000, oid, ref sb, "ZNFHKG站内负荷开关");
+                GetLossInfo(dt, dtResult_XD, 110000, oid, ref sb, "ZSBYQ柱上变压器");
+                GetLossInfo(dt, dt_PG_PDBYQ, 302000, oid, ref sb, "PDBYQ配电变压器");
+                GetLossInfo(dt, dtResult_XD, 390000, oid, ref sb, "ZNDL站内其他");
+                message = sb.ToString();
+            }
+            catch (Exception ex)
+            {
+
+            }
+            return message;
+        }
+        private void GetLossInfo(DataTable dt, DataTable dt1, int typeid, long oid, ref StringBuilder sb, string title)
+        {
+            DataRow[] topo = dt.Select("xl_oid=" + oid + " and typeid=" + typeid);
+            DataRow[] db = dt1.Select("xl_oid=" + oid + " and typeid=101000");
+            if (topo.Length > db.Length)
+            {
+                List<string> listoid = new List<string>();
+                foreach (var dr in db)
+                {
+                    listoid.Add(dr["oid"].ToString());
+                }
+                sb.Append(Environment.NewLine + title);
+                foreach (var dr in topo)
+                {
+                    if (listoid.Contains(dr["oid"].ToString())) continue;
+                    sb.Append(Environment.NewLine + dr["oid"] + "---" + dr["typeid"]);
+                }
+            }
+        }
+    }
+}

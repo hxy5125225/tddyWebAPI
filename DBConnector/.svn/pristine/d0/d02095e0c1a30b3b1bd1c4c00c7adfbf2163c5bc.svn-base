@@ -1,0 +1,138 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Data;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace DBConnector
+{
+    public class DataTableClass
+    {
+        public static System.Data.DataTable JoinTable(DataTable dt1, System.Data.DataTable dt2, System.Data.DataTable dt3)
+        {
+            System.Data.DataTable dtAll = new System.Data.DataTable();
+            GetColumns(dt1.Columns, ref dtAll);
+            GetColumns(dt2.Columns, ref dtAll);
+            var query = from tab1 in dt1.AsEnumerable()
+                        from tab2 in dt2.AsEnumerable()
+                        where tab1.Field<long>("oid") == tab2.Field<long>("oid") &&
+                              tab1.Field<long>("chkg") == tab2.Field<long>("chkg") &&
+                              tab1.Field<string>("equips").Trim() == tab2.Field<string>("equips").Trim()
+                        select new
+                        {
+                            oid = tab1.Field<long>("oid"),
+                            equips = tab1.Field<string>("equips"),
+                            typeid = tab1.Field<long>("typeid"),
+                            chkg = tab1.Field<long>("chkg"),
+                            年份 = tab2.Field<int>("年份"),
+                            start_conn = tab2.Field<string>("start_conn"),
+                            end_conn = tab2.Field<string>("end_conn"),
+                            sbzlx = tab2.Field<long>("sbzlx"),
+                            type = tab2.Field<string>("type"),
+                            shape = tab2.Field<string>("shape"),
+                            devicetype = tab2.Field<int>("devicetype"),
+                            devicename = tab2.Field<string>("devicename"),
+                            blackname = tab2.Field<string>("blackname"),
+                            kgzt = tab2.Field<int>("kgzt"),
+                            sbid = tab2.Field<string>("sbid"),
+                            xlcd = tab2.Field<double>("xlcd")
+                        };
+            System.Data.DataTable dtNew = dtAll.Copy();
+            foreach (var obj in query)
+            {
+                dtNew.Rows.Add(obj.oid, obj.equips, obj.typeid, obj.chkg, obj.年份, obj.start_conn, obj.end_conn, obj.sbzlx, obj.type, obj.shape, obj.devicetype, obj.devicename, obj.blackname, obj.kgzt, obj.sbid, obj.xlcd);
+            }
+            System.Data.DataTable dtNew1 = JoinTable1(dtNew, dt3);
+            //ExecuteNoneQuery(dt1); 
+            return dtNew;
+        }
+        public static System.Data.DataTable JoinTable(DataTable dt1, System.Data.DataTable dt2)
+        {
+            System.Data.DataTable dtNew = null;
+            try
+            {
+                System.Data.DataTable dtAll = new System.Data.DataTable();
+                GetColumns(dt1.Columns, ref dtAll);
+                GetColumns(dt2.Columns, ref dtAll);
+                var query = from tab1 in dt1.AsEnumerable()
+                            from tab2 in dt2.AsEnumerable()
+                            where tab1.Field<string>("bdz_sbid") == tab2.Field<string>("DWZY_ID")
+                            select new
+                            {
+                                bdz_id = tab1.Field<string>("bdz_id"),
+                                bdz_mc = tab1.Field<long>("bdz_mc"),
+                                xl_oid = tab1.Field<string>("xl_oid"),
+                                xl_cxkg = tab1.Field<string>("xl_cxkg"),
+                                xl_cxjg = tab1.Field<int>("xl_cxjg"),
+                                xl_mc = tab1.Field<string>("xl_mc"),
+                                shape = tab1.Field<string>("shape"),
+                                devicetype = tab1.Field<int>("devicetype"),
+                                DWZY_ID = tab2.Field<string>("DWZY_ID"),
+                                RUN_TRANS_NUM = tab2.Field<string>("RUN_TRANS_NUM"),
+                                OBJ_ID = tab2.Field<long>("OBJ_ID"),
+                                ZRL = tab2.Field<long>("ZRL"),
+                                RLGC = tab2.Field<int>("RLGC"),
+                                MAX_LOAD = tab2.Field<string>("MAX_LOAD")
+                            };
+                dtNew = dtAll.Copy();
+                foreach (var obj in query)
+                {
+                    dtNew.Rows.Add(obj.DWZY_ID, obj.RUN_TRANS_NUM, obj.OBJ_ID, obj.ZRL, obj.RLGC, obj.MAX_LOAD, obj.bdz_id, obj.bdz_mc, obj.xl_oid, obj.xl_cxkg, obj.xl_cxjg, obj.xl_mc, obj.shape, obj.devicetype);
+                }
+            }
+            catch (Exception ex)
+            {
+
+                throw new Exception(ex.StackTrace);
+            }
+            return dtNew;
+        }
+        public static System.Data.DataTable JoinTable1(System.Data.DataTable dt1, System.Data.DataTable dt2)
+        {
+            System.Data.DataTable dtAll = new System.Data.DataTable();
+            GetColumns(dt1.Columns, ref dtAll);
+            GetColumns(dt2.Columns, ref dtAll);
+            var query = from tab1 in dt1.AsEnumerable()
+                        from tab2 in dt2.AsEnumerable()
+                        where tab1.Field<string>("sbid") == tab2.Field<string>("sbid")
+                        select new
+                        {
+                            oid = tab1.Field<long>("oid"),
+                            equips = tab1.Field<string>("equips"),
+                            typeid = tab1.Field<long>("typeid"),
+                            chkg = tab1.Field<long>("chkg"),
+                            年份 = tab1.Field<int>("年份"),
+                            start_conn = tab1.Field<string>("start_conn"),
+                            end_conn = tab1.Field<string>("end_conn"),
+                            sbzlx = tab1.Field<long>("sbzlx"),
+                            type = tab1.Field<string>("type"),
+                            shape = tab1.Field<string>("shape"),
+                            devicetype = tab1.Field<int>("devicetype"),
+                            devicename = tab1.Field<string>("devicename"),
+                            blackname = tab1.Field<string>("blackname"),
+                            kgzt = tab1.Field<int>("kgzt"),
+                            sbid = tab1.Field<string>("sbid"),
+                            xlcd = tab1.Field<double>("xlcd"),
+                            NAME = tab2.Field<string>("NAME")
+                        };
+            System.Data.DataTable dtNew = dtAll.Copy();
+            foreach (var obj in query)
+            {
+                dtNew.Rows.Add(obj.oid, obj.equips, obj.typeid, obj.chkg, obj.年份, obj.start_conn, obj.end_conn, obj.sbzlx, obj.type, obj.shape, obj.devicetype, obj.devicename, obj.blackname, obj.kgzt, obj.sbid, obj.xlcd, obj.NAME);
+            }
+
+            return dtNew;
+        }
+        public static void GetColumns(DataColumnCollection columns, ref DataTable dtAll)
+        {
+            foreach (System.Data.DataColumn column in columns)
+            {
+                if (dtAll.Columns.Contains(column.ColumnName)) continue;
+                dtAll.Columns.Add(column.ColumnName, column.DataType);
+            }
+        }
+
+
+    }
+}

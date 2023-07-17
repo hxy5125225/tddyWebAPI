@@ -1,0 +1,138 @@
+﻿using Npgsql;
+using System;
+using System.Collections.Generic;
+using System.Data;
+using System.Linq;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace DBConnector
+{
+    public class ThreadProc
+    {
+        public static List<System.Data.DataTable> list = null;
+        public static List<System.Data.DataTable> ThreadMethod()
+        {
+            list = new List<DataTable>();
+            Task task1 = Task.Run<DataTable>(() => CreateTask("Task1")).ContinueWith(td => { list.Add(td.Result); });
+            Task task2 = Task.Run<DataTable>(() => CreateTask("Task2")).ContinueWith(td => { list.Add(td.Result); });
+            Task task3=Task.Run<DataTable>(() => CreateTask("Task3")).ContinueWith(td => { list.Add(td.Result); });
+            Task task4=Task.Run<DataTable>(() => CreateTask("Task4")).ContinueWith(td => { list.Add(td.Result); });
+            Task task5=Task.Run<DataTable>(() => CreateTask("Task5")).ContinueWith(td => { list.Add(td.Result); });
+            Task task6=Task.Run<DataTable>(() => CreateTask("Task6")).ContinueWith(td => { list.Add(td.Result); });
+            Task task7=Task.Run<DataTable>(() => CreateTask("Task7")).ContinueWith(td => { list.Add(td.Result); });
+            Task task8=Task.Run<DataTable>(() => CreateTask("Task8")).ContinueWith(td => { list.Add(td.Result); });
+            Task task9=Task.Run<DataTable>(() => CreateTask("Task9")).ContinueWith(td => { list.Add(td.Result); });
+            Task task10=Task.Run<DataTable>(() => CreateTask("Task10")).ContinueWith(td => { list.Add(td.Result); });
+
+
+
+            //Task<DataTable>  task1 = CreateTask("Task 1");
+            //task1.Start();
+            //Task<DataTable> task2 = CreateTask("Task 2");
+            //task2.Start();
+            //Task<DataTable> task3 = CreateTask("Task 3");
+            //task3.Start();
+            //Task<DataTable> task4 = CreateTask("Task 4");
+            //task4.Start();
+            //Task<DataTable> task5 = CreateTask("Task 5");
+            //task5.Start();
+            //Task<DataTable> task6 = CreateTask("Task 6");
+            //task6.Start();
+            //Task<DataTable> task7 = CreateTask("Task 7");
+            //task7.Start();
+            //Task<DataTable> task8 = CreateTask("Task 8");
+            //task8.Start();
+            //Task<DataTable> task9 = CreateTask("Task 9");
+            //task9.Start();
+            //Task<DataTable> task10 = CreateTask("Task 10"); 
+            //task10.Start();
+            bool vb = false;
+            bool b1 = false;
+            bool b2 = false;
+            bool b3 = false;
+            bool b4 = false;
+            bool b5 = false;
+            bool b6 = false;
+            bool b7 = false;
+            bool b8 = false;
+            bool b9 = false;
+            bool b10 = false;
+            while (!vb)
+            {
+                if (task1.Status == TaskStatus.RanToCompletion && !b1)
+                {
+                    //list.Add(task1.Result);
+                    b1 = true;
+                }
+                if (task2.Status == TaskStatus.RanToCompletion && !b2)
+                {
+                   // list.Add(task2.Result);
+                    b2 = true;
+                }
+
+                if (task3.Status == TaskStatus.RanToCompletion && !b3)
+                {
+                   // list.Add(task3.Result);
+                    b3 = true;
+                }
+                if (task4.Status == TaskStatus.RanToCompletion && !b4)
+                {
+                    //list.Add(task4.Result);
+                    b4 = true;
+                }
+                if (task5.Status == TaskStatus.RanToCompletion && !b5)
+                {
+                    //list.Add(task5.Result);
+                    b5 = true;
+                }
+                if (task6.Status == TaskStatus.RanToCompletion && !b6)
+                {
+                    //list.Add(task6.Result);
+                    b6 = true;
+                }
+                if (task7.Status == TaskStatus.RanToCompletion && !b7)
+                {
+                    //list.Add(task7.Result);
+                    b7 = true;
+                }
+                if (task8.Status == TaskStatus.RanToCompletion && !b8)
+                {
+                    //list.Add(task8.Result);
+                    b8 = true;
+                }
+                if (task9.Status == TaskStatus.RanToCompletion && !b9)
+                {
+                    //list.Add(task9.Result);
+                    b9 = true;
+                }
+                if (task10.Status == TaskStatus.RanToCompletion && !b10)
+                {
+                    //list.Add(task10.Result);
+                    b10 = true;
+                }
+                if (b1 && b2 && b3 && b4 && b5 && b6 && b7 && b8 && b9 && b10)
+                {
+                    vb = true;
+                }
+                else
+                {
+                    vb = false;
+                }
+
+            }
+            return list;
+        }
+
+        private static Task<DataTable> CreateTask(string name)
+        {
+            return new Task<DataTable>(() => TaskMethod(name));
+        }
+
+        private static DataTable TaskMethod(string name)
+        {
+            return PG.PGClass.QueryNpgDatabase("select oid,sbmc,yxbh,dydj,sbzlx,sszrq,ssdz,state_id,fhjd,connection,sbid,yxdw,ssjg,kgzt,fhdx,sfbz,bzdx,bzys,bzfw,plfs,dhzs,x,y,type,jhkgzt,bzxszd,bznr,ssds,kzfhid,apptype,sskx,ssdkx,ssdkxzx,ckzt,versionid,sfyc,kgyt,_checksum,ssxl,sfzg,zczg,sfzclj,lldkx1,lldkx2,wsbm from dwzy.t_tx_znyc_fhkg limit  60000");
+        }
+    } 
+}

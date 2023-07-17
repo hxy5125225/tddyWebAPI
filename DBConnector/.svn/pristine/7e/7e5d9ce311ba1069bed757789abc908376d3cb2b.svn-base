@@ -1,0 +1,1438 @@
+﻿using Npgsql;
+using NpgsqlTypes;
+using System;
+using System.Collections.Generic;
+using System.Data;
+using System.Data.Common;
+using System.Linq;
+using System.Text;
+namespace DBConnector.PG
+{
+    public class PGClass
+    {
+        /// <summary>
+        /// 查询数据库
+        /// </summary>
+        /// <param name="sql">sql脚本</param>
+        /// <returns>DataTable</returns>
+        public static DataTable QueryNpgDatabase(string sql)
+        {
+            DataTable dt = new DataTable();
+            try
+            {
+                using (NpgsqlConnection cn = new NpgsqlConnection(ConfigClass.PGConString))
+                {
+                    cn.Open();
+                    using (NpgsqlCommand cmd = new NpgsqlCommand(sql, cn))
+                    {
+                        using (NpgsqlDataReader reader = cmd.ExecuteReader())
+                        {
+                            if (reader == null) return dt;
+                            dt.Locale = System.Globalization.CultureInfo.InvariantCulture;
+                            int fieldCount = reader.FieldCount;
+                            // 在表中创建字段
+                            for (int counter = 0; counter < fieldCount; counter++)
+                            {
+                                dt.Columns.Add(reader.GetName(counter), reader.GetFieldType(counter));
+                            }
+                            dt.BeginLoadData();
+                            object[] values = new object[fieldCount];
+                            reader.GetEnumerator();
+                            while (reader.Read())
+                            {
+                                // 添加行
+                                reader.GetValues(values);
+                                dt.LoadDataRow(values, true);
+                            }
+                            // 完成转换并返回
+                            dt.EndLoadData();
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+
+                throw new Exception(ex.StackTrace);
+            }
+            return dt;
+
+        }
+        public static NpgsqlParameter[] InitNpgsqlParameter(List<object> objects)
+		{
+            List<NpgsqlParameter> parameters = new List<NpgsqlParameter>();
+            for(int i = 0; i < objects.Count; i++)
+			{
+                parameters.Add(new NpgsqlParameter("param" + i, objects[i]));
+            }
+            return parameters.ToArray();
+        }
+        /// <summary>
+        /// 查询数据库
+        /// </summary>
+        /// <param name="cn">NpgsqlConnection连接</param>
+        /// <param name="sql">sql脚本</param>
+        /// <returns>DataTable</returns>
+        public static DataTable QueryNpgDatabase(NpgsqlConnection cn, string sql,List<object> objects)
+        {
+            DataTable dt = new DataTable();
+            try
+            {
+                if (cn.State != ConnectionState.Open)
+                    cn.Open();
+                using (NpgsqlCommand cmd = new NpgsqlCommand(sql, cn))
+                {
+					if (objects.Count > 0)
+					{
+                        cmd.Parameters.AddRange(InitNpgsqlParameter(objects));
+                    }
+                    using (NpgsqlDataAdapter da = new NpgsqlDataAdapter(cmd))
+                    {
+                        DataSet ds = new DataSet();
+                        da.Fill(ds);
+                        dt = ds.Tables[0];
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                throw new Exception(ex.StackTrace + Environment.NewLine + ex.Message);
+            }
+            finally
+            {
+            }
+            return dt;
+        }
+
+        //public static DataTable QueryNpgDatabase(NpgsqlConnection cn, string sql)
+        //{
+        //    DataTable dt = new DataTable();
+        //    try
+        //    {
+        //        if (cn.State != ConnectionState.Open)
+        //            cn.Open();
+        //        using (NpgsqlCommand cmd = new NpgsqlCommand(sql, cn))
+        //        {
+        //            using (NpgsqlDataReader reader = cmd.ExecuteReader())
+        //            {
+
+        //                if (reader == null) return dt;
+        //                var t = reader.GetType();
+        //                dt.Locale = System.Globalization.CultureInfo.InvariantCulture;
+        //                int fieldCount = reader.FieldCount;
+        //                // 在表中创建字段
+        //                for (int counter = 0; counter < fieldCount; counter++)
+        //                {
+        //                    dt.Columns.Add(reader.GetName(counter), reader.GetFieldType(counter));
+        //                }
+
+        //                dt.BeginLoadData();
+        //                object[] values = new object[fieldCount];
+        //                while (reader.Read())
+        //                {
+        //                    // 添加行
+        //                    reader.GetValues(values);
+        //                    dt.LoadDataRow(values, true);
+        //                }
+        //                // 完成转换并返回
+        //                dt.EndLoadData();
+        //                reader.Close();
+        //            }
+        //        }
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        throw new Exception(ex.StackTrace + Environment.NewLine + ex.Message);
+        //    }
+        //    finally
+        //    {
+        //    }
+        //    return dt;
+        //}
+        public static DataTable CreateTableBySchemaTable(DataTable pSchemaTable)
+        {
+            DataTable dtReturn = new DataTable();
+            DataColumn dc = null;
+            DataRow dr = null;
+            for (int i = 0; i < pSchemaTable.Rows.Count; i++)
+            {
+                dr = pSchemaTable.Rows[i];
+                dc = new DataColumn(dr["ColumnName"].ToString(), dr["DataType"] as Type);
+                dtReturn.Columns.Add(dc);
+            }
+            dr = null;
+            dc = null;
+            return dtReturn;
+        }
+        public static void ExecuteNoneQuery(DataTable dt)
+        {
+            using (NpgsqlConnection cn = new NpgsqlConnection(ConfigClass.PGConString))
+            {
+                cn.Open();
+                foreach (DataRow dr in dt.Rows)
+                {
+                    //oid,equips,typeid,chkg)
+                   // string sql = string.Format(ConfigClass.PG_InsertSql, dr["oid"].ToString(), dr["equips"].ToString(), dr["typeid"].ToString(), dr["cxkg"].ToString());
+                    using (NpgsqlCommand cmd = new NpgsqlCommand(ConfigClass.PG_InsertSql, cn))
+                    {
+                        List < NpgsqlParameter >  parames = new List<NpgsqlParameter> 
+                        { 
+                            new NpgsqlParameter("param0", dr["oid"].ToString()),
+                            new NpgsqlParameter("param1", dr["equips"].ToString()),
+                            new NpgsqlParameter("param2", dr["typeid"].ToString()),
+                            new NpgsqlParameter("param3", dr["cxkg"].ToString())
+                        };
+                        cmd.Parameters.AddRange(parames.ToArray());
+                        cmd.CommandType = CommandType.Text;
+                        cmd.ExecuteNonQuery();
+                    }
+                }
+            }
+
+        }
+        public static void ExecuteNoneQuery(string sql)
+        {
+            using (NpgsqlConnection cn = new NpgsqlConnection(ConfigClass.PGConString))
+            {
+                cn.Open();
+                using (NpgsqlCommand cmd = new NpgsqlCommand(sql, cn))
+                {
+                    cmd.CommandType = CommandType.Text;
+                    cmd.ExecuteNonQuery();
+                }
+            }
+
+        }
+        public static int ExecuteNoneQuery(string sql,List<object> objects, NpgsqlConnection cn)
+        {
+            int nums = 0;
+            if (string.IsNullOrEmpty(sql)) return nums;
+            try
+            {
+                if (cn.State != ConnectionState.Open)
+                    cn.Open();
+                using (NpgsqlCommand cmd = new NpgsqlCommand(sql, cn))
+                {
+                    if(objects.Count>0) cmd.Parameters.AddRange(InitNpgsqlParameter(objects));
+                    cmd.CommandType = CommandType.Text;
+                    nums = cmd.ExecuteNonQuery();
+                }
+            }
+            catch (Exception ex)
+            {
+                throw new Exception(ex.StackTrace + Environment.NewLine + ex.Message);
+            }
+            finally
+            {
+            }
+            return nums;
+        }
+        /// <summary>
+        /// 创建临时表
+        /// </summary>
+        public static void CreateTempTable(NpgsqlConnection cn, string sql)
+        {
+            using (NpgsqlCommand cmd = new NpgsqlCommand(sql, cn))
+            {
+                cmd.CommandType = CommandType.Text;
+                cmd.ExecuteNonQuery();
+            }
+        }
+        //public static void CreateTempTable(DataTable dt, ref UserInfo userInfo)
+        //{
+        //    using (NpgsqlConnection cn = new NpgsqlConnection(ConfigClass.PGConString))
+        //    {
+        //        cn.Open();
+        //        using (NpgsqlCommand cmd = new NpgsqlCommand(ConfigClass.PG_CreateTempTable, cn))
+        //        {
+        //            cmd.CommandType = CommandType.Text;
+        //            cmd.ExecuteNonQuery();
+        //        }
+        //        WriteToServer<ServerDBInfo>(dt, 1, cn);
+
+        //        userInfo.dtFeeder = QueryNpgDatabase(cn, LightweightRAS.PublicKeyDecrypt(GZipUtil.UnZip(ConfigClass.PG_Qurey_XDXX)));
+        //        //DataTable s = QueryNpgDatabase(cn, "select * from topo_sb_line_oid");
+        //        userInfo.dtSwitch = QueryNpgDatabase(cn, LightweightRAS.PublicKeyDecrypt(GZipUtil.UnZip(ConfigClass.PG_Qurey_KGXX)));
+        //    }
+        //}
+        //public static void CreateTopoWjfx(DataTable dt)
+        //{
+        //    using (NpgsqlConnection cn = new NpgsqlConnection(ConfigClass.PGConString))
+        //    {
+        //        cn.Open();
+        //        WriteToServer<TopoWjfx>(dt, 2, cn);
+
+        //    }
+        //}
+
+        public static string GetDeleteSql(DataRow[] dataRows, string taskId)
+        {
+            return "delete from {0} where task_id=" + taskId;
+            if (dataRows == null || dataRows.Length == 0) return "";
+            string sql = "delete from {0} where task_id in (";
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < dataRows.Length; i++)
+            {
+                if (i == dataRows.Length - 1)
+                {
+                    sb.Append("'" + dataRows[i]["bdz_id"] + "')");
+                }
+                else
+                {
+                    sb.Append("'" + dataRows[i]["bdz_id"] + "',");
+                }
+            }
+            sql += sb.ToString();
+            return sql;
+        }
+        public static void WriteToServer(DataTable data, string DestinationTableName, NpgsqlConnection conn)
+        {
+            try
+            {
+                if (conn.State != ConnectionState.Open)
+                {
+                    conn.Open();
+                    conn.TypeMapper.UseNetTopologySuite(handleOrdinates: GeoAPI.Geometries.Ordinates.XYZ);
+                }
+                if (data == null || data.Rows.Count == 0) return;
+                if (string.IsNullOrEmpty(DestinationTableName)) return;
+                OperateDataTable(ref data, DestinationTableName, conn);
+                DataColumnCollection collection = data.Columns;
+                System.Type[] dbTypes = new System.Type[collection.Count];
+                int colCount = collection.Count;
+                List<string> listName = new List<string>();
+                for (int i = 0; i < colCount; i++)
+                {
+                    dbTypes[i] = collection[i].DataType;
+                    listName.Add(collection[i].ColumnName.ToLower());
+                }
+                NpgsqlDbType[] types = new NpgsqlDbType[colCount];
+                int[] lengths = new int[colCount];
+                string[] fieldNames = new string[colCount];
+
+                using (var cmd = new NpgsqlCommand(string.Format(ConfigClass.Query_Columns, DestinationTableName), conn))
+                {
+                    using (var rdr = cmd.ExecuteReader())
+                    {
+                        var columns = rdr.GetColumnSchema();
+                        int count = 0;
+                        for (int i = 0; i < columns.Count; i++)
+                        {
+                            if (!listName.Contains(columns[i].ColumnName.ToLower())) continue;
+                            int c = listName.IndexOf(columns[i].ColumnName.ToLower());
+                            types[c] = (NpgsqlDbType)columns[i].NpgsqlDbType;
+                            lengths[c] = columns[i].ColumnSize == null ? 0 : (int)columns[i].ColumnSize;
+                            fieldNames[c] = columns[i].ColumnName.ToLower();
+                            count++;
+                        }
+                    }
+
+                }
+                var sB = new StringBuilder(fieldNames[0]);
+                for (int p = 1; p < colCount; p++)
+                {
+                    sB.Append(", " + fieldNames[p]);
+                }
+
+                using (var writer = conn.BeginBinaryImport("COPY " + DestinationTableName + " (" + sB.ToString() + ") FROM STDIN (FORMAT BINARY)"))
+                {
+                    object value;
+                    foreach (DataRow t in data.Rows)
+                    {
+                        writer.StartRow();
+
+                        for (int i = 0; i < colCount; i++)
+                        {
+                            value = t[fieldNames[i]];
+                            if (value == DBNull.Value)
+                            {
+                                writer.WriteNull();
+                            }
+                            else
+                            {
+                                switch (types[i])
+                                {
+                                    case NpgsqlDbType.Json:
+                                        value = value == DBNull.Value ? "" : value;
+                                        if (string.IsNullOrEmpty(value.ToString()))
+                                        {
+                                            writer.WriteNull();
+                                        }
+                                        else
+                                        {
+                                            writer.Write(value.ToString(), types[i]);
+                                        }
+                                        break;
+                                    case NpgsqlDbType.Bigint:
+                                        writer.Write(string.IsNullOrEmpty(value.ToString()) ? 0 : Convert.ToInt64(value.ToString()), types[i]);
+                                        break;
+                                    case NpgsqlDbType.Bit:
+                                        if (lengths[i] > 1)
+                                        {
+                                            writer.Write((byte[])value, types[i]);
+                                        }
+                                        else
+                                        {
+                                            writer.Write((byte)value, types[i]);
+                                        }
+                                        break;
+                                    case NpgsqlDbType.Boolean:
+                                        writer.Write((bool)value, types[i]);
+                                        break;
+                                    case NpgsqlDbType.Bytea:
+                                        writer.Write((byte[])value, types[i]);
+                                        break;
+                                    case NpgsqlDbType.Char:
+                                        if (dbTypes[i] == typeof(string))
+                                        {
+                                            writer.Write(value.ToString(), types[i]);
+                                        }
+                                        else if (dbTypes[i] == typeof(Guid))
+                                        {
+                                            writer.Write(value.ToString(), types[i]);
+                                        }
+
+                                        else if (lengths[i] > 1)
+                                        {
+                                            writer.Write((char[])value, types[i]);
+                                        }
+                                        else
+                                        {
+
+                                            var s = value.ToString().ToCharArray();
+                                            writer.Write(s[0], types[i]);
+                                        }
+                                        break;
+                                    case NpgsqlDbType.Time:
+                                    case NpgsqlDbType.Timestamp:
+                                    case NpgsqlDbType.TimestampTz:
+                                    case NpgsqlDbType.Date:
+                                        writer.Write((DateTime)value, types[i]);
+                                        break;
+                                    case NpgsqlDbType.Double:
+                                        writer.Write(Convert.ToDouble(value.ToString()), types[i]);
+                                        break;
+                                    case NpgsqlDbType.Integer:
+                                        try
+                                        {
+                                            if (dbTypes[i] == typeof(int))
+                                            {
+                                                writer.Write(Convert.ToInt32(value.ToString()), types[i]);
+                                                break;
+                                            }
+                                            else if (dbTypes[i] == typeof(string))
+                                            {
+                                                var swap = Convert.ToInt32(value);
+                                                writer.Write(swap, types[i]);
+                                                break;
+                                            }
+                                        }
+                                        catch (Exception ex)
+                                        {
+                                            throw new Exception(ex.StackTrace + Environment.NewLine + ex.Message);
+                                        }
+
+                                        writer.Write((object)value, types[i]);
+                                        break;
+                                    case NpgsqlDbType.Interval:
+                                        writer.Write((TimeSpan)value, types[i]);
+                                        break;
+                                    case NpgsqlDbType.Numeric:
+                                        value = value == DBNull.Value ? 0 : value;
+                                        writer.Write(Convert.ToDouble(value.ToString()), types[i]);
+                                        break;
+                                    case NpgsqlDbType.Money:
+                                        value = value == DBNull.Value ? 0m : value;
+                                        writer.Write((decimal)value, types[i]);
+                                        break;
+                                    case NpgsqlDbType.Real:
+                                        writer.Write((Single)value, types[i]);
+                                        break;
+                                    case NpgsqlDbType.Smallint:
+
+                                        try
+                                        {
+                                            if (dbTypes[i] == typeof(byte))
+                                            {
+                                                var swap = Convert.ToInt16(value);
+                                                writer.Write((short)swap, types[i]);
+                                                break;
+                                            }
+                                            writer.Write((Int32)value, types[i]);
+                                        }
+                                        catch (Exception ex)
+                                        {
+                                            throw new Exception(ex.StackTrace + Environment.NewLine + ex.Message);
+                                        }
+
+                                        break;
+                                    case NpgsqlDbType.Varchar:
+                                    case NpgsqlDbType.Text:
+                                        value = value == DBNull.Value ? "" : value;
+                                        writer.Write(value.ToString(), types[i]);
+                                        break;
+                                    case NpgsqlDbType.Uuid:
+                                        writer.Write((Guid)value, types[i]);
+                                        break;
+                                    case NpgsqlDbType.Xml:
+                                        writer.Write(value.ToString(), types[i]);
+                                        break;
+                                    case NpgsqlDbType.Geometry:
+                                        writer.Write((NetTopologySuite.Geometries.Geometry)value, types[i]);
+                                        break;
+                                }
+                            }
+                        }
+                    }
+                    writer.Complete();
+                }
+            }
+            catch (Exception ex)
+            {
+                if (conn.ConnectionString.Contains("fzgis_ghdw"))
+                {
+                    SaveLogInfo(new List<object[]>() { new object[] { taskId, DestinationTableName + " 入库失败！" + ex.Message } }, conn);
+                }
+                else
+                {
+                    SaveFzGisLogInfo(new List<object[]>() { new object[] { taskId, DestinationTableName + " 入库失败！" + ex.Message } });
+                }
+                //throw new Exception(ex.StackTrace + Environment.NewLine + ex.Message);
+            }
+            finally
+            {
+            }
+        }
+
+        private static void OperateDataTable(ref DataTable data, string DestinationTableName, NpgsqlConnection conn)
+        {
+            List<string> listDb = new List<string>();
+            using (var cmd = new NpgsqlCommand(string.Format(ConfigClass.Query_Columns, DestinationTableName), conn))
+            {
+                using (var rdr = cmd.ExecuteReader())
+                {
+                    var columns = rdr.GetColumnSchema();
+                    for (int i = 0; i < columns.Count; i++)
+                    {
+                        listDb.Add(columns[i].ColumnName.ToLower());
+                    }
+                }
+            }
+            List<string> listIn = new List<string>();
+            foreach (DataColumn item in data.Columns)
+            {
+                if (listDb.Contains(item.ColumnName.ToLower())) continue;
+                listIn.Add(item.ColumnName);
+            }
+            for (int i = 0; i < listIn.Count; i++)
+            {
+                data.Columns.Remove(listIn[i]);
+            }
+        }
+
+        //public static void WriteToServer(DataTable data, string DestinationTableName, NpgsqlConnection conn)
+        //{
+        //    try
+        //    {
+        //        if (data == null || data.Rows.Count == 0 || string.IsNullOrEmpty(DestinationTableName)) return;
+        //        DataColumnCollection collection = data.Columns;
+        //        int colCount = collection.Count;
+        //        var sB = new StringBuilder();
+        //        for (int p = 0; p < colCount; p++)
+        //        {
+        //            if (p == colCount - 1)
+        //            {
+        //                sB.Append(collection[p].ColumnName.ToLower());
+        //            }
+        //            else
+        //            {
+        //                sB.Append(collection[p].ColumnName.ToLower() + ", ");
+        //            }
+        //        }
+        //        using (var writer = conn.BeginBinaryImport("COPY " + DestinationTableName + " (" + sB.ToString() + ") FROM STDIN (FORMAT BINARY)"))
+        //        {
+        //            foreach (DataRow t in data.Rows)
+        //            {
+        //                writer.WriteRow(t.ItemArray);
+        //            }
+        //            writer.Complete();
+        //        }
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        int a = 0;
+        //    }
+        //}
+
+        public static void WriteToServer(DataTable data, string DestinationTableName, string connString)
+        {
+            NpgsqlConnection conn = null;
+            try
+            {
+                if (data == null || data.Rows.Count == 0 || string.IsNullOrEmpty(DestinationTableName)) return;
+                conn = new NpgsqlConnection(connString);
+                conn.Open();
+                DataColumnCollection collection = data.Columns;
+                int colCount = collection.Count;
+                var sB = new StringBuilder();
+                for (int p = 0; p < colCount; p++)
+                {
+                    if (p == colCount - 1)
+                    {
+                        sB.Append(collection[p].ColumnName.ToLower());
+                    }
+                    else
+                    {
+                        sB.Append(collection[p].ColumnName.ToLower() + ", ");
+                    }
+                }
+                using (var writer = conn.BeginBinaryImport("COPY " + DestinationTableName + " (" + sB.ToString() + ") FROM STDIN (FORMAT BINARY)"))
+                {
+                    foreach (DataRow t in data.Rows)
+                    {
+                        writer.WriteRow(t.ItemArray);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                throw new Exception("Error executing NpgSqlBulkCopy.WriteToServer().  See inner exception for details", ex);
+            }
+            finally
+            {
+                if (conn != null)
+                    conn.Dispose();
+            }
+        }
+
+        /// <summary>
+        /// 结果写进数据库表
+        /// </summary>
+        /// <param name="dt">DataTable dt</param>
+        /// <param name="con">NpgsqlConnection con</param>
+        /// <param name="dicName">Dictionary<string,string> dicName;自定义生成的表格和数据库表格表头的对应字典</param>
+        /// <param name="dicType">Dictionary<string ,System.Type> dicType；自定义数据库表格字段与类型的对应字典</param>
+        /// /// <param name="tableName">string tableName；要插入的表格名称</param>
+        public static void ContrastTableAndWrite(DataTable dt, NpgsqlConnection con, Dictionary<Dictionary<string, System.Type>, string> dicName, string tableName)
+        {
+            try
+            {
+                //1、创建对应数据库字段的表结构
+                DataTable dtNew = new DataTable();
+                foreach (var item in dicName)
+                {
+                    dtNew.Columns.Add(item.Key.First().Key, item.Key.First().Value);
+                }
+                //2、转换数据
+                foreach (DataRow dr in dt.Rows)
+                {
+                    try
+                    {
+                        DataRow row = dtNew.NewRow();
+                        foreach (var item in dicName)
+                        {
+                            row[item.Key.First().Key] = dr[item.Value];
+                        }
+                        dtNew.Rows.Add(row);
+                    }
+                    catch (Exception ex)
+                    {
+                        //throw new Exception(ex.StackTrace + "\n" + ex.Message);
+                    }
+                }
+
+                WriteToServer(dtNew, tableName, con);
+            }
+            catch (Exception ex)
+            {
+                string message = "";
+            }
+        }
+        public static void DeleteAndSave(NpgsqlConnection cn, DataRow[] drs, string dbName, List<string> list, string sql,string taskid, bool isDelete)
+        {
+            try
+            {
+                if (isDelete)
+                    ExecuteNoneQuery(sql, new List<object>() { taskid }, cn);
+                if (drs.Length == 0) return;
+                DataTable dt = drs.CopyToDataTable();
+                for (int i = 0; i < list.Count; i++)
+                {
+                    dt.Columns.Remove(list[i]);
+                }
+                WriteToServer(dt, dbName, cn);
+            }
+            catch (Exception ex)
+            {
+                SaveLogInfo(new List<object[]>() { new object[] { taskId, "PG写入" + dbName + "失败！" + ex.Message } }, cn);
+            }
+        }
+        public static void SaveLogInfo(List<object[]> list, NpgsqlConnection cn)
+        {
+            DataTable dt = DataTableClass.CreateLogTable();
+            for (int i = 0; i < list.Count; i++)
+            {
+                dt.Rows.Add(list[i]);
+            }
+            WriteToServer(dt, "wjfx.t_log_info", cn);
+            DataTableClass.Dispose(dt);
+        }
+        public static void SaveFzGisLogInfo(List<object[]> list)
+        {
+            Npgsql.NpgsqlConnection conn = null;
+            try
+            {
+                PGConn pG = new PGConn();
+                conn = pG.conn;
+                DataTable dt = DataTableClass.CreateGlsbLogTable();
+                for (int i = 0; i < list.Count; i++)
+                {
+                    dt.Rows.Add(list[i]);
+                }
+                WriteToServer(dt, "wjfx_glsb.t_log_info", conn);
+                DataTableClass.Dispose(dt);
+            }
+            catch (Exception ex)
+            {
+                throw new Exception(ex.Message);
+            }
+            finally
+            {
+                if (conn != null)
+                {
+                    conn.Close();
+                    conn.Dispose();
+                }
+            }
+        }
+        public static void SaveFzGisLogInfo(string message, Npgsql.NpgsqlConnection conn)
+        {
+            string sql = "insert into wjfx_glsb.t_log_info (log_content) values (@param0)";
+            ExecuteNoneQuery(sql, new List<object>() {  message },conn);
+        }
+        public static void SaveLogInfo(List<object[]> list)
+        {
+            NpgsqlConnection cn = new NpgsqlConnection(ConfigClass.PG_GHDW_ConString);
+            cn.Open();
+            DataTable dt = DataTableClass.CreateLogTable();
+            for (int i = 0; i < list.Count; i++)
+            {
+                dt.Rows.Add(list[i]);
+            }
+            WriteToServer(dt, "wjfx.t_log_info", cn);
+            cn.Dispose();
+            DataTableClass.Dispose(dt);
+        }
+        public static string taskId;
+        /// <summary>
+        /// 保存异常信息
+        /// </summary>
+        /// <param name="cn"></param>
+        /// <param name="listStatus"></param>
+        public static void SaveLogError(NpgsqlConnection cn, List<TaskCompleteStatu> listStatus)
+        {
+            if (listStatus.Count == 0) return;
+            DataTable dt = DataTableClass.CreateErrorLogTable();
+            foreach (var item in listStatus)
+            {
+                dt.Rows.Add(item.ToArray());
+            }
+            WriteToServer(dt, "wjfx.t_task_info", cn);
+            DataTableClass.Dispose(dt);
+        }
+        public static void SaveLogError(List<TaskCompleteStatu> listStatus)
+        {
+            if (listStatus.Count == 0) return;
+            using (NpgsqlConnection cn = new NpgsqlConnection(ConfigClass.PG_GHDW_ConString))
+            {
+                cn.Open();
+                DataTable dt = DataTableClass.CreateErrorLogTable();
+                foreach (var item in listStatus)
+                {
+                    dt.Rows.Add(item.ToArray());
+                }
+                WriteToServer(dt, "wjfx.t_task_info", cn);
+                DataTableClass.Dispose(dt);
+                cn.Close();
+            }
+        }
+        /// <summary>
+        /// 拆分表格并插入到WJFX断面的各个表中
+        /// </summary>
+        /// <
+        /// param name="dt">DataTable</param>  
+        public static void SplitTableSave_WJFX(DataTable qyxxtable, DataTable dt, DataTable dtfd, DataTable dtfz, DataTable zyxl, string task_id, string parameter, List<object> paramList, DataTable tbfh, DataTable dtTransLoadCheck, DataTable dt_check, DataTable dtErr, List<object[]> listX, NpgsqlConnection cn, ref bool isSuccess, int callload,int onlywg)
+        {
+            taskId = task_id;
+            try
+            {
+                string sql = "";
+                SaveLogInfo(new List<object[]>() { new object[] { task_id, "PG结果数据入库开始！" } }, cn);
+
+				if (qyxxtable!=null&& qyxxtable.Rows.Count>0)
+				{
+                    sql = "delete from wjfx.t_tx_ghsb_qyxx where task_id='" + task_id + "'";
+                    ExecuteNoneQuery(sql, new List<object>() { }, cn);
+                    WriteToServer(qyxxtable, "wjfx.t_tx_ghsb_qyxx", cn);
+                    SaveLogInfo(new List<object[]>() { new object[] { task_id, "t_tx_ghsb_qyxx成功！" } }, cn);
+
+                    PGClass.BatchUpdataData(cn, qyxxtable, "wjfx.t_tx_ghsb_qyxx", new List<string>() { "wjt", "wjt_bounder" }, new List<string>() { "oid" });
+                }
+                if (onlywg == 1) return;//只存储网格单元网架图返回
+				sql = "delete from wjfx.t_tx_zwyc_fd where task_id=@param0";
+                ExecuteNoneQuery(sql, new List<object>() { task_id }, cn);
+                WriteToServer(dtfd, "wjfx.t_tx_zwyc_fd", cn);
+                sql = "delete from wjfx.t_tx_zwyc_fz where task_id=@param0";
+                SaveLogInfo(new List<object[]>() { new object[] { task_id, "t_tx_zwyc_fd成功！" } }, cn);
+                ExecuteNoneQuery(sql, new List<object>() { task_id }, cn);
+                WriteToServer(dtfz, "wjfx.t_tx_zwyc_fz", cn);
+                sql = "delete from wjfx.t_tx_zwyc_dkx where task_id=@param0";
+                SaveLogInfo(new List<object[]>() { new object[] { task_id, "t_tx_zwyc_fz成功！" } }, cn);
+                ExecuteNoneQuery(sql,new List<object>() { task_id }, cn);
+
+                DataTable dt_zyxl = zyxl.Copy();
+                dt_zyxl.Columns["org_id"].ColumnName = "sbid";
+                dt_zyxl.Columns["org_dwzy_id"].ColumnName = "dwzy_id";
+                List<string> list = list = GetColumnNames(cn, "wjfx.t_tx_zwyc_dkx");
+                for (int i = 0; i < dt_zyxl.Columns.Count; i++)
+                {
+                    if (list.Contains(dt_zyxl.Columns[i].ColumnName.ToLower())) continue;
+                    dt_zyxl.Columns.Remove(dt_zyxl.Columns[i].ColumnName);
+                    i--;
+                }
+                if (callload == 0)
+                {
+                    dt_zyxl.Columns.Remove("load_check_info");
+                    dtErr.Columns.Remove("load_check_info");
+                }
+                WriteToServer(dt_zyxl, "wjfx.t_tx_zwyc_dkx", cn);
+                WriteToServer(dtErr, "wjfx.t_tx_zwyc_dkx", cn);
+                SaveLogInfo(new List<object[]>() { new object[] { task_id, "t_tx_zwyc_dkx成功！" } }, cn);
+                //WriteToServer(tbfh, "wjfx.t_tx_znyc_pdfh", cn);//LOAD 
+
+                sql = "delete from wjfx.t_tx_znyc_dz where task_id=@param0";
+                dt = DataTableClass.Distinct(dt, "oid", "typeid");
+                DeleteAndSave(cn, dt.Select("wjt<>''"), "wjfx.t_tx_znyc_dz", new List<string>() { "typeid", "txbxh", "ssdz", "devtype", "self", "pdts", "pdrl", "pdfh", "xlcd", "in_dkx", "order_gis" }, sql,task_id, true);
+                DataTable datable = dt.Clone();
+                List<object> objects = new List<object>();
+                foreach (DataRow row in dt.Select("typeid =311000"))
+                {
+                    if (objects.Contains(row.ItemArray[1])) continue;
+                    datable.ImportRow(row);
+                    objects.Add(row.ItemArray[1]);
+                }
+                DeleteAndSave(cn, datable.Select(), "wjfx.t_tx_znyc_dz", new List<string>() { "typeid", "txbxh", "ssdz", "devtype", "self", "pdts", "pdrl", "pdfh", "wjt", "wjt_bounder", "xlcd","obj_id", "order_gis" }, sql, task_id, false);
+                SaveLogInfo(new List<object[]>() { new object[] { task_id, "t_tx_znyc_dz 成功！" } }, cn);
+                sql = "delete from wjfx.t_tx_zwyc_dld where task_id=@param0";
+                DeleteAndSave(cn, dt.Select("typeid =201000"), "wjfx.t_tx_zwyc_dld", new List<string>() { "typeid", "txbxh", "ssdz", "devtype", "self", "pdts", "pdrl", "pdfh", "kgzy", "wjt", "wjt_bounder", "in_dkx", "sbmc","mx_num", "obj_id", "order_gis" }, sql, task_id, true);//order_gis 20230531此期没上删除
+
+                sql = "delete from wjfx.t_tx_zwyc_dxd where task_id=@param0";  
+                SaveLogInfo(new List<object[]>() { new object[] { task_id, "t_tx_zwyc_dld 成功！" } }, cn);
+                DeleteAndSave(cn, dt.Select("typeid =101000"), "wjfx.t_tx_zwyc_dxd", new List<string>() { "typeid", "txbxh", "ssdz", "devtype", "self", "pdts", "pdrl", "pdfh", "kgzy", "wjt", "wjt_bounder", "in_dkx", "sbmc", "mx_num", "obj_id", "order_gis" }, sql, task_id, true);//order_gis 20230531此期没上删除
+                SaveLogInfo(new List<object[]>() { new object[] { task_id, "t_tx_zwyc_dxd 成功！" } }, cn);
+                sql = "delete from wjfx.t_tx_zwyc_zsbyq where task_id=@param0";
+                DeleteAndSave(cn, dt.Select("typeid =110000"), "wjfx.t_tx_zwyc_zsbyq", new List<string>() { "typeid", "txbxh", "ssdz", "devtype", "self", "pdts", "kgzy", "wjt", "wjt_bounder", "xlcd", "in_dkx", "sbmc", "mx_num", "order_gis" }, sql, task_id, true);
+                SaveLogInfo(new List<object[]>() { new object[] { task_id, "t_tx_zwyc_zsbyq 成功！" } }, cn);
+                sql = "delete from wjfx.t_tx_zwyc_zsdlq where task_id=@param0";
+                DeleteAndSave(cn, dt.Select("typeid =111000"), "wjfx.t_tx_zwyc_zsdlq", new List<string>() { "typeid", "txbxh", "ssdz", "devtype", "self", "pdts", "pdrl", "pdfh", "wjt", "wjt_bounder", "xlcd", "mx_num", "obj_id", "order_gis" }, sql, task_id, true);
+                SaveLogInfo(new List<object[]>() { new object[] { task_id, "t_tx_zwyc_zsdlq 成功！" } }, cn);
+                sql = "delete from wjfx.t_tx_zwyc_zsfhkg where task_id=@param0";
+                DeleteAndSave(cn, dt.Select("typeid =112000"), "wjfx.t_tx_zwyc_zsfhkg", new List<string>() { "typeid", "txbxh", "ssdz", "devtype", "self", "pdts", "pdrl", "pdfh", "wjt", "wjt_bounder", "xlcd", "mx_num", "obj_id", "order_gis" }, sql, task_id, true);
+                SaveLogInfo(new List<object[]>() { new object[] { task_id, "t_tx_zwyc_zsfhkg 成功！" } }, cn);
+                sql = "delete from wjfx.t_tx_zwyc_zsglkg where task_id=@param0";
+                DeleteAndSave(cn, dt.Select("typeid =113000"), "wjfx.t_tx_zwyc_zsglkg", new List<string>() { "typeid", "txbxh", "ssdz", "devtype", "self", "pdts", "pdrl", "pdfh", "kgzy", "wjt", "wjt_bounder", "xlcd", "in_dkx", "sbmc", "mx_num", "obj_id", "order_gis" }, sql, task_id, true);
+                SaveLogInfo(new List<object[]>() { new object[] { task_id, "t_tx_zwyc_zsglkg 成功！" } }, cn);
+                sql = "delete from wjfx.t_tx_zwyc_zwljx where task_id=@param0";
+                DeleteAndSave(cn, dt.Select("typeid =130000"), "wjfx.t_tx_zwyc_zwljx", new List<string>() { "typeid", "txbxh", "ssdz", "devtype", "self", "pdts", "pdrl", "pdfh", "kgzy", "wjt", "wjt_bounder", "xlcd", "in_dkx", "sbmc", "mx_num", "obj_id", "order_gis" }, sql, task_id, true);
+                SaveLogInfo(new List<object[]>() { new object[] { task_id, "t_tx_zwyc_zwljx 成功！" } }, cn);
+                sql = "delete from wjfx.t_tx_zwyc_zwcljx where task_id=@param0";
+                DeleteAndSave(cn, dt.Select("typeid =140000"), "wjfx.t_tx_zwyc_zwcljx", new List<string>() { "typeid", "txbxh", "ssdz", "devtype", "self", "pdts", "pdrl", "pdfh", "kgzy", "wjt", "wjt_bounder", "xlcd", "in_dkx", "sbmc", "mx_num", "obj_id", "order_gis" }, sql, task_id, true);
+                SaveLogInfo(new List<object[]>() { new object[] { task_id, "t_tx_zwyc_zwcljx 成功！" } }, cn);
+                PG.PGClass.CreateTempTable(cn, ConfigClass.PG_CreateTempTable_PDBYQ);
+                sql = "delete from wjfx.t_tx_znyc_pdbyq where task_id=@param0";
+                ExecuteNoneQuery(sql, new List<object>() {task_id }, cn);
+                DeleteAndSave(cn, dt.Select("typeid =302000"), "wjfx.t_tx_znyc_pdbyq", new List<string>() { "typeid", "txbxh", "devtype", "self", "pdts", "kgzy", "wjt", "wjt_bounder", "xlcd", "in_dkx", "sbmc", "mx_num", "order_gis" }, sql, task_id, false);
+                SaveLogInfo(new List<object[]>() { new object[] { task_id, "t_tx_znyc_pdbyq 成功！" } }, cn);
+                
+                ExecuteNoneQuery(string.Format(ConfigClass.PG_Insert_ZNYC_DZ,parameter), new List<object>() { paramList[0], paramList[1], task_id }, cn);
+                sql = "delete from wjfx.t_tx_zwyc_dkx_check where task_id=@param0";
+                ExecuteNoneQuery(sql, new List<object>() { task_id }, cn);
+                DataTable dtLoadCheck = DataTableClass.OperateLeftJoin(dtTransLoadCheck, dt_check, new List<string>() { "ssdkx" }, new List<string>() { "ssdkx" }).DefaultView.ToTable(false, new string[] { "oid", "ssdkx", "periods", "max_load_time", "pd_load", "task_id", "llxl", "llxl_rl", "llxl_fh", "llxl_sbmc" });
+                DataTable dtCheck = dtLoadCheck.Clone();
+                foreach (DataRow item in dtLoadCheck.Rows)
+                {
+                    dtCheck.Rows.Add(new object[] { Guid.NewGuid().ToString(), item["ssdkx"], item["periods"], item["max_load_time"], item["pd_load"], item["task_id"], item["llxl"], item["llxl_rl"], item["llxl_fh"], item["llxl_sbmc"] });
+                }
+                WriteToServer(dtCheck, "wjfx.t_tx_zwyc_dkx_check", cn);
+                SaveLogInfo(new List<object[]>() { new object[] { task_id, "t_tx_zwyc_dkx_check 成功！" } }, cn);
+                list = GetColumnNames(cn, "wjfx.t_tx_zwyc_dkx_check");
+                if (list.Contains("llxl_zgfh"))
+                {
+                    ExecuteNoneQuery(ConfigClass.PG_Update_Check, new List<object>() { task_id }, cn);
+                    SaveLogInfo(new List<object[]>() { new object[] { task_id, "PG_Update_Check 成功！" } }, cn);
+                }
+                ExecuteNoneQuery(ConfigClass.PG_Update_ZgLoad, new List<object>() { task_id }, cn);
+
+                ExecuteNoneQuery("call wjfx.update_dkx_lj_xl_n1('" + task_id + "')", new List<object>(), cn);
+
+                ////调用存储过程 update_dkx_lj_xl_n1 参数task_id
+                //NpgsqlParameter[] paras = new NpgsqlParameter[1];
+                //paras[0] = new NpgsqlParameter("@col_task_id",NpgsqlTypes.NpgsqlDbType.Varchar,100);
+                //paras[0].Value = task_id;
+
+                //ExecuteProcedure("call wjfx.update_dkx_lj_xl_n1('"+task_id+"')", paras, cn,task_id);
+                ExecuteNoneQuery(string.Format(ConfigClass.PG_Update_dkx,parameter), new List<object>() { paramList[0], paramList[1], task_id }, cn);
+                ExecuteNoneQuery(string.Format(ConfigClass.PG_Update_FD, parameter), new List<object>() { paramList[0], paramList[1], task_id }, cn);
+                SaveTopoLogInfo(listX, cn);
+                SaveLogInfo(new List<object[]>() { new object[] { task_id, "PG数据入库成功！" } }, cn);
+            }
+            catch (Exception ex)
+            {
+                isSuccess = false;
+                SaveLogInfo(new List<object[]>() { new object[] { task_id, "PG入库失败：" + ex.Message + Environment.NewLine + ex.StackTrace } }, cn);
+                throw new Exception(ex.StackTrace + ex.Message);
+            }
+            finally
+            {
+                try
+                {
+                    if (cn != null)
+                    {
+                        cn.Close();
+                        cn.Dispose();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    throw new Exception(ex.StackTrace + ex.Message);
+                }
+
+
+            }
+        }
+        public static List<string> GetColumnNames(NpgsqlConnection cn, string tabName)
+        {
+            DataTable dtCol = QueryNpgDatabase(cn, "select * from  "+ tabName  +  "  limit 1", new List<object>());
+            List<string> list = new List<string>();
+            foreach (DataColumn item in dtCol.Columns)
+            {
+                list.Add(item.ColumnName.ToLower());
+            }
+            return list;
+        }
+        private static void SaveTopoLogInfo(List<object[]> list, NpgsqlConnection cn)
+        {
+            DataTable dt = DataTableClass.CreateTopoLogTable();
+            for (int i = 0; i < list.Count; i++)
+            {
+                dt.Rows.Add(list[i]);
+            }
+            WriteToServer(dt, "wjfx.t_log_info", cn);
+        }
+        public static void ExecuteProcedure(string sql, NpgsqlParameter[] parameters, NpgsqlConnection conn, string task_id)
+        {
+            try
+            {
+                using (NpgsqlCommand cmd = conn.CreateCommand())
+                {
+                    cmd.CommandText = sql;
+                    cmd.CommandType = CommandType.StoredProcedure;
+                    cmd.Parameters.AddRange(parameters);
+                    cmd.ExecuteNonQuery();
+                }
+            }
+            catch (Exception ex)
+            {
+                SaveLogInfo(new List<object[]>() { new object[] { task_id, "存储过程执行失败：" + ex.Message + Environment.NewLine + ex.StackTrace } }, conn);
+            }
+        }
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="connection"></param>
+        /// <param name="table">更新数据</param>
+        /// <param name="pgtablename">更新表</param>
+        /// <param name="paras">更新字段</param>
+        /// <param name="whereparas">批量更新的 where 条件字段</param>
+        /// <returns></returns>
+        public static bool BatchUpdataData(NpgsqlConnection connection, DataTable table, string pgtablename, List<string> paras, List<string> whereparas)
+        {
+            bool state = false;
+            NpgsqlTransaction transaction = null;
+            try
+            {
+                string Select = "select * from " + pgtablename + " where task_id ='" + taskId + "'  limit 1 ";
+                List<string> updatesqls = new List<string>();
+                DataColumnCollection collection = table.Columns;
+                System.Type[] dbTypes = new System.Type[collection.Count];
+                int colCount = collection.Count;
+                List<string> listName = new List<string>();
+                for (int i = 0; i < colCount; i++)
+                {
+                    dbTypes[i] = collection[i].DataType;
+                    listName.Add(collection[i].ColumnName.ToLower());
+                }
+                NpgsqlDbType[] types = new NpgsqlDbType[colCount];
+                int[] lengths = new int[colCount];
+                string[] fieldNames = new string[colCount];
+                using (var cmd1 = new NpgsqlCommand(Select, connection))
+                {
+                    using (var rdr = cmd1.ExecuteReader())
+                    {
+                        var columns = rdr.GetColumnSchema();
+                        int count = 0;
+                        for (int i = 0; i < columns.Count; i++)
+                        {
+                            if (!listName.Contains(columns[i].ColumnName.ToLower())) continue;
+                            int c = listName.IndexOf(columns[i].ColumnName.ToLower());
+                            types[c] = (NpgsqlDbType)columns[i].NpgsqlDbType;
+                            fieldNames[c] = columns[i].ColumnName.ToLower();
+                            count++;
+                        }
+                    }
+                }
+                if (connection.State != ConnectionState.Open)
+                {
+                    connection.Open();
+                }
+                NpgsqlCommand cmd = new NpgsqlCommand();
+                transaction = connection.BeginTransaction();
+                cmd.Transaction = transaction;
+                cmd.Connection = connection;
+                cmd.CommandType = CommandType.Text;
+                cmd.CommandTimeout = 0;
+                object value = null;
+                string sql = "UPDATE " + pgtablename + " SET ";
+                string wheresql = " where " + pgtablename + ".task_id ='" + taskId + "' and ";
+                for (int i = 0; i < paras.Count; i++)
+                {
+                    if (!listName.Contains(paras[i])) continue;
+                    if (whereparas.Contains(paras[i])) continue;
+                    int index = listName.IndexOf(paras[i]);
+                    if (types[index] == NpgsqlDbType.Json)
+                    {
+                        sql = sql + " " + fieldNames[index] + "= A." + fieldNames[index] + "::jsonb ,";
+                    }
+                    else
+                    {
+                        sql = sql + " " + fieldNames[index] + "= A." + fieldNames[index] + " ,";
+                    }
+
+
+                }
+                for (int i = 0; i < whereparas.Count; i++)
+                {
+                    if (!listName.Contains(whereparas[i])) continue;
+                    int index = listName.IndexOf(whereparas[i]);
+                    if (i == whereparas.Count - 1)
+                        wheresql = wheresql + pgtablename + "." + fieldNames[index] + "= A." + fieldNames[index] + "  ";
+                    else
+                        wheresql = wheresql + pgtablename + "." + fieldNames[index] + "= A." + fieldNames[index] + " and  ";
+                }
+                if (sql.EndsWith(",")) sql = sql.Substring(0, sql.Length - 1);
+                sql = sql + " from (";
+                foreach (DataRow t in table.Rows)
+                {
+                    string sqlselect = "select ";
+                    for (int i = 0; i < listName.Count; i++)
+                    {
+                        if (!paras.Contains(listName[i]) && !whereparas.Contains(listName[i])) continue;
+                        value = t[fieldNames[i]];
+                        if (paras.Contains(listName[i]))
+                        {
+                            switch (types[i])
+                            {
+                                case NpgsqlDbType.Json:
+                                    value = value == DBNull.Value ? "" : value;
+                                    if (string.IsNullOrEmpty(value.ToString()))
+                                    {
+                                        sqlselect = sqlselect + " null as " + fieldNames[i] + ",";
+                                    }
+                                    else
+                                    {
+                                        sqlselect = sqlselect + "'" + value.ToString() + "'  AS " + fieldNames[i] + ",";
+                                    }
+                                    break;
+                                case NpgsqlDbType.Bigint:
+                                    value = string.IsNullOrEmpty(value.ToString()) ? 0 : Convert.ToInt64(value.ToString());
+                                    sqlselect = sqlselect + " " + value + "  AS " + fieldNames[i] + ",";
+                                    break;
+                                case NpgsqlDbType.Bit:
+                                case NpgsqlDbType.Boolean:
+                                case NpgsqlDbType.Bytea:
+                                case NpgsqlDbType.Char:
+                                case NpgsqlDbType.Time:
+                                case NpgsqlDbType.Timestamp:
+                                case NpgsqlDbType.TimestampTz:
+                                case NpgsqlDbType.Date:
+                                    break;
+                                case NpgsqlDbType.Double:
+                                    value = Convert.ToDouble(value.ToString());
+                                    sqlselect = sqlselect + " " + value + "  AS " + fieldNames[i] + ",";
+                                    break;
+                                case NpgsqlDbType.Integer:
+                                    try
+                                    {
+                                        if (dbTypes[i] == typeof(int))
+                                        {
+                                            sqlselect = sqlselect + " " + Convert.ToInt32(value.ToString()) + "  AS " + fieldNames[i] + ",";
+                                            break;
+                                        }
+                                        else if (dbTypes[i] == typeof(string))
+                                        {
+                                            var swap = Convert.ToInt32(value);
+                                            sqlselect = sqlselect + " " + swap + "  AS " + fieldNames[i] + ",";
+                                            break;
+                                        }
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        throw new Exception(ex.StackTrace + Environment.NewLine + ex.Message);
+                                    }
+                                    break;
+                                case NpgsqlDbType.Interval:
+                                case NpgsqlDbType.Money:
+                                case NpgsqlDbType.Real:
+                                    break;
+                                case NpgsqlDbType.Numeric:
+                                    value = value == DBNull.Value ? 0 : value;
+                                    if (fieldNames[i] == "pdfh") value = 110;
+                                    sqlselect = sqlselect + " " + Convert.ToDouble(value.ToString()) + "  AS " + fieldNames[i] + ",";
+                                    break;
+                                case NpgsqlDbType.Smallint:
+
+                                    try
+                                    {
+                                        if (dbTypes[i] == typeof(byte))
+                                        {
+                                            value = Convert.ToInt16(value);
+                                            break;
+                                        }
+                                        sqlselect = sqlselect + " " + (Int32)value + "  AS " + fieldNames[i] + ",";
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        throw new Exception(ex.StackTrace + Environment.NewLine + ex.Message);
+                                    }
+
+                                    break;
+                                case NpgsqlDbType.Varchar:
+                                case NpgsqlDbType.Text:
+                                    value = value == DBNull.Value ? "" : value;
+                                    sqlselect = sqlselect + "'" + value.ToString() + "'  AS " + fieldNames[i] + ",";
+                                    break;
+                                case NpgsqlDbType.Uuid:
+                                    sqlselect = sqlselect + "'" + value.ToString() + "'  AS " + fieldNames[i] + ",";
+                                    break;
+                                case NpgsqlDbType.Xml:
+                                    sqlselect = sqlselect + "'" + value.ToString() + "'  AS " + fieldNames[i] + ",";
+                                    break;
+                                case NpgsqlDbType.Geometry:
+                                    break;
+                            }
+                        }
+                    }
+                    sqlselect = sqlselect.Substring(0, sqlselect.Length - 1);
+                    updatesqls.Add(sqlselect);
+                }
+                string uniontable = "";
+                for (int i = 0; i < updatesqls.Count; i++)
+                {
+                    if (i % 2000 == 0 && i > 0)
+                    {
+                        uniontable = uniontable + updatesqls[i] + " ";
+                        uniontable = sql + uniontable + ") A " + wheresql;
+                        cmd.CommandText = uniontable;
+                        cmd.ExecuteNonQuery();
+                        transaction.Commit();
+                        transaction = connection.BeginTransaction();
+                        cmd.Transaction = transaction;
+                        uniontable = "";
+                    }
+                    else
+                    {
+                        if (i == updatesqls.Count - 1)
+                        {
+                            uniontable = uniontable + " " + updatesqls[i] + " ";
+                        }
+                        else
+                        {
+                            uniontable = uniontable + " " + updatesqls[i] + " union all ";
+                        }
+                    }
+                }
+                if (!string.IsNullOrEmpty(uniontable))
+                {
+                    uniontable = sql + uniontable + ") A " + wheresql;
+                    cmd.CommandText = uniontable;
+                    cmd.ExecuteNonQuery();
+                    transaction.Commit();
+                }
+            }
+            catch (Exception ex)
+            {
+                string stre = ex.Message;
+                state = false;
+                if (transaction != null)
+                {
+                    transaction.Rollback();
+                }
+
+            }
+            finally
+            {
+                if (transaction != null)
+                {
+                    transaction.Dispose();
+                }
+                transaction = null;
+
+            }
+            return state;
+        }
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="connection"></param>
+        /// <param name="table">更新数据</param>
+        /// <param name="pgtablename">更新表</param>
+        /// <param name="paras">更新字段</param>
+        /// <param name="whereparas">批量更新的 where 条件字段</param>
+        /// <returns></returns>
+        public static bool BatchUpdataData_1(NpgsqlConnection connection, DataTable table, string pgtablename, List<string> paras, List<string> whereparas)
+        {
+            bool state = false;
+            NpgsqlTransaction transaction = null;
+            try
+            {
+                string Select = "select * from " + pgtablename + "   limit 1 ";
+                List<string> updatesqls = new List<string>();
+                DataColumnCollection collection = table.Columns;
+                System.Type[] dbTypes = new System.Type[collection.Count];
+                int colCount = collection.Count;
+                List<string> listName = new List<string>();
+                for (int i = 0; i < colCount; i++)
+                {
+                    dbTypes[i] = collection[i].DataType;
+                    listName.Add(collection[i].ColumnName.ToLower());
+                }
+                NpgsqlDbType[] types = new NpgsqlDbType[colCount];
+                int[] lengths = new int[colCount];
+                string[] fieldNames = new string[colCount];
+                using (var cmd1 = new NpgsqlCommand(Select, connection))
+                {
+                    using (var rdr = cmd1.ExecuteReader())
+                    {
+                        var columns = rdr.GetColumnSchema();
+                        int count = 0;
+                        for (int i = 0; i < columns.Count; i++)
+                        {
+                            if (!listName.Contains(columns[i].ColumnName.ToLower())) continue;
+                            int c = listName.IndexOf(columns[i].ColumnName.ToLower());
+                            types[c] = (NpgsqlDbType)columns[i].NpgsqlDbType;
+                            fieldNames[c] = columns[i].ColumnName.ToLower();
+                            count++;
+                        }
+                    }
+                }
+                if (connection.State != ConnectionState.Open)
+                {
+                    connection.Open();
+                }
+                NpgsqlCommand cmd = new NpgsqlCommand();
+                transaction = connection.BeginTransaction();
+                cmd.Transaction = transaction;
+                cmd.Connection = connection;
+                cmd.CommandType = CommandType.Text;
+                cmd.CommandTimeout = 0;
+                object value = null;
+                string sql = "UPDATE " + pgtablename + " SET ";
+                string wheresql = " where " ;
+                for (int i = 0; i < paras.Count; i++)
+                {
+                    if (!listName.Contains(paras[i])) continue;
+                    if (whereparas.Contains(paras[i])) continue;
+                    int index = listName.IndexOf(paras[i]);
+                    if (types[index] == NpgsqlDbType.Json)
+                    {
+                        sql = sql + " " + fieldNames[index] + "= A." + fieldNames[index] + "::jsonb ,";
+                    }
+                    else
+                    {
+                        sql = sql + " " + fieldNames[index] + "= A." + fieldNames[index] + " ,";
+                    }
+
+
+                }
+                for (int i = 0; i < whereparas.Count; i++)
+                {
+                    if (!listName.Contains(whereparas[i])) continue;
+                    int index = listName.IndexOf(whereparas[i]);
+                    if (i == whereparas.Count - 1)
+                        wheresql = wheresql + pgtablename + "." + fieldNames[index] + "= A." + fieldNames[index] + "  ";
+                    else
+                        wheresql = wheresql + pgtablename + "." + fieldNames[index] + "= A." + fieldNames[index] + " and  ";
+                }
+                if (sql.EndsWith(",")) sql = sql.Substring(0, sql.Length - 1);
+                sql = sql + " from (";
+                foreach (DataRow t in table.Rows)
+                {
+                    string sqlselect = "select ";
+                    for (int i = 0; i < listName.Count; i++)
+                    {
+                        if (!paras.Contains(listName[i]) && !whereparas.Contains(listName[i])) continue;
+                        value = t[fieldNames[i]];
+                        if (paras.Contains(listName[i]))
+                        {
+                            switch (types[i])
+                            {
+                                case NpgsqlDbType.Json:
+                                    value = value == DBNull.Value ? "" : value;
+                                    if (string.IsNullOrEmpty(value.ToString()))
+                                    {
+                                        sqlselect = sqlselect + " null as " + fieldNames[i] + ",";
+                                    }
+                                    else
+                                    {
+                                        sqlselect = sqlselect + "'" + value.ToString() + "'  AS " + fieldNames[i] + ",";
+                                    }
+                                    break;
+                                case NpgsqlDbType.Bigint:
+                                    value = string.IsNullOrEmpty(value.ToString()) ? 0 : Convert.ToInt64(value.ToString());
+                                    sqlselect = sqlselect + " " + value + "  AS " + fieldNames[i] + ",";
+                                    break;
+                                case NpgsqlDbType.Bit:
+                                case NpgsqlDbType.Boolean:
+                                case NpgsqlDbType.Bytea:
+                                case NpgsqlDbType.Char:
+                                case NpgsqlDbType.Time:
+                                case NpgsqlDbType.Timestamp:
+                                case NpgsqlDbType.TimestampTz:
+                                case NpgsqlDbType.Date:
+                                    break;
+                                case NpgsqlDbType.Double:
+                                    value = Convert.ToDouble(value.ToString());
+                                    sqlselect = sqlselect + " " + value + "  AS " + fieldNames[i] + ",";
+                                    break;
+                                case NpgsqlDbType.Integer:
+                                    try
+                                    {
+                                        if (dbTypes[i] == typeof(int))
+                                        {
+                                            sqlselect = sqlselect + " " + Convert.ToInt32(value.ToString()) + "  AS " + fieldNames[i] + ",";
+                                            break;
+                                        }
+                                        else if (dbTypes[i] == typeof(string))
+                                        {
+                                            var swap = Convert.ToInt32(value);
+                                            sqlselect = sqlselect + " " + swap + "  AS " + fieldNames[i] + ",";
+                                            break;
+                                        }
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        throw new Exception(ex.StackTrace + Environment.NewLine + ex.Message);
+                                    }
+                                    break;
+                                case NpgsqlDbType.Interval:
+                                case NpgsqlDbType.Money:
+                                case NpgsqlDbType.Real:
+                                    break;
+                                case NpgsqlDbType.Numeric:
+                                    value = value == DBNull.Value ? 0 : value;
+                                    if (fieldNames[i] == "pdfh") value = 110;
+                                    sqlselect = sqlselect + " " + Convert.ToDouble(value.ToString()) + "  AS " + fieldNames[i] + ",";
+                                    break;
+                                case NpgsqlDbType.Smallint:
+
+                                    try
+                                    {
+                                        if (dbTypes[i] == typeof(byte))
+                                        {
+                                            value = Convert.ToInt16(value);
+                                            break;
+                                        }
+                                        sqlselect = sqlselect + " " + (Int32)value + "  AS " + fieldNames[i] + ",";
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        throw new Exception(ex.StackTrace + Environment.NewLine + ex.Message);
+                                    }
+
+                                    break;
+                                case NpgsqlDbType.Varchar:
+                                case NpgsqlDbType.Text:
+                                    value = value == DBNull.Value ? "" : value;
+                                    sqlselect = sqlselect + "'" + value.ToString() + "'  AS " + fieldNames[i] + ",";
+                                    break;
+                                case NpgsqlDbType.Uuid:
+                                    sqlselect = sqlselect + "'" + value.ToString() + "'  AS " + fieldNames[i] + ",";
+                                    break;
+                                case NpgsqlDbType.Xml:
+                                    sqlselect = sqlselect + "'" + value.ToString() + "'  AS " + fieldNames[i] + ",";
+                                    break;
+                                case NpgsqlDbType.Geometry:
+                                    break;
+                            }
+                        }
+                    }
+                    sqlselect = sqlselect.Substring(0, sqlselect.Length - 1);
+                    updatesqls.Add(sqlselect);
+                }
+                string uniontable = "";
+                for (int i = 0; i < updatesqls.Count; i++)
+                {
+                    if (i % 2000 == 0 && i > 0)
+                    {
+                        uniontable = uniontable + updatesqls[i] + " ";
+                        uniontable = sql + uniontable + ") A " + wheresql;
+                        cmd.CommandText = uniontable;
+                        cmd.ExecuteNonQuery();
+                        transaction.Commit();
+                        transaction = connection.BeginTransaction();
+                        cmd.Transaction = transaction;
+                        uniontable = "";
+                    }
+                    else
+                    {
+                        if (i == updatesqls.Count - 1)
+                        {
+                            uniontable = uniontable + " " + updatesqls[i] + " ";
+                        }
+                        else
+                        {
+                            uniontable = uniontable + " " + updatesqls[i] + " union all ";
+                        }
+                    }
+                }
+                if (!string.IsNullOrEmpty(uniontable))
+                {
+                    uniontable = sql + uniontable + ") A " + wheresql;
+                    cmd.CommandText = uniontable;
+                    cmd.ExecuteNonQuery();
+                    transaction.Commit();
+                }
+            }
+            catch (Exception ex)
+            {
+                string stre = ex.Message;
+                state = false;
+                if (transaction != null)
+                {
+                    transaction.Rollback();
+                }
+
+            }
+            finally
+            {
+                if (transaction != null)
+                {
+                    transaction.Dispose();
+                }
+                transaction = null;
+
+            }
+            return state;
+        }
+    }
+}

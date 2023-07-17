@@ -1,0 +1,403 @@
+using Npgsql;
+using Oracle.ManagedDataAccess.Client;
+using System;
+using System.Collections.Generic;
+using System.Data;
+using System.Linq;
+using System.Runtime.InteropServices;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace DBConnector
+{
+    public class ConfigClass
+    {
+        /// <summary>
+        /// PG连接字符串
+        /// </summary>
+        public static string PGConString { get; set; }
+        public static string PG_GHDW_ConString { get; set; }
+        public static string OracleConString { get; set; }
+        public static string ServerDataIp { get; set; }
+        public static string LoadDataIp { get; set; }
+        public static string taskId { get; set; }
+        public static string OracleIP { get; set; }
+        public static string ORACLEPORT { get; set; }
+        public static string ORACLESERVERNAME { get; set; }
+        public static string ORACLEUSERID { get; set; }
+        public static string ORACLEPASSWORD { get; set; } 
+        public static string TDDY_PUBLISH_IP { get; set; }
+        public static string TDDY_TOPO_STATE { get; set; }
+        public static string TDDY_LOAD_IP { get; set; }
+        /// <summary>
+        /// 初始化数据库连接
+        /// </summary>
+        /// <param name="ip"></param>
+        /// <param name="port"></param>
+        /// <param name="userId"></param>
+        /// <param name="pwd"></param>
+        /// <param name="dbName"></param>
+        /// <param name="type">0：PG   1：PG_GHDW   2:Oracle</param>
+        public static void Initial_PG_Config()
+        {
+            PGConString = ConfigClass.GetEnvironment("TDDY_PG");
+            PG_GHDW_ConString = ConfigClass.GetEnvironment("TDDY_PG_GH");
+            ServerDataIp = ConfigClass.GetEnvironment("TDDY_TOPO_URL");
+            LoadDataIp = ConfigClass.GetEnvironment("TDDY_LOAD_URL");
+            OracleIP = ConfigClass.GetEnvironment("TDDY_ORACLE_HOST");
+            ORACLEPORT = ConfigClass.GetEnvironment("TDDY_ORACLE_PORT");
+            ORACLESERVERNAME = ConfigClass.GetEnvironment("TDDY_ORACLE_SERVICE_NAME");
+            ORACLEUSERID = ConfigClass.GetEnvironment("TDDY_ORACLE_USER_ID");
+            ORACLEPASSWORD = ConfigClass.GetEnvironment("TDDY_ORACLE_PASSWORD");
+            TDDY_PUBLISH_IP = GetEnvironment("TDDY_PUBLISH_IP");
+            TDDY_TOPO_STATE = GetEnvironment("TDDY_TOPO_STATE");
+            TDDY_LOAD_IP = GetEnvironment("TDDY_LOAD_IP");
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                OracleConString = "Data Source=(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=172.16.144.251)(PORT=11521))(CONNECT_DATA=(SERVICE_NAME=pis)));Persist Security Info=True;User ID=pis;Password=New_2#4dba;VALIDATE CONNECTION=True;";
+            }
+            else
+            {
+                OracleConString = "Data Source=(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=" + OracleIP + ")(PORT=" + ORACLEPORT + "))(CONNECT_DATA=(SERVICE_NAME=" + ORACLESERVERNAME + ")));Persist Security Info=True;User ID=" + ORACLEUSERID + ";Password=" + ORACLEPASSWORD + ";VALIDATE CONNECTION=True;";
+            }
+        }
+
+        /// <summary>
+        /// 负荷的接口的url
+        /// </summary>
+        public static string interfaceUrl_FH { get; set; }
+        //单位序号
+
+        #region PG
+
+
+        /// <summary>
+        /// 查询变电站
+        /// </summary>
+        public static string PG_QuerySql_Substation = "WITH bdz_info AS (SELECT oid, sbmc, sbid, sbzlx, dydj FROM sxgis.v_t_tx_znyc_dz WHERE sbzlx= 30000000 AND dydj IN (25,30,32,33) AND data_flag !=3 AND {0}),line_info as (select to_char(CURRENT_DATE,'yyyy') || A.cxkglx || A.cxkg AS oid,'' || A.cxkglx || A.cxkg AS ID,A.sbzlx,dydj,A.oid AS xl_oid,A.cxkg AS xl_cxkg,A.cxkglx AS xl_cxkglx,A.cxkglx/100 AS typeid, A.sbmc,A.sbid,B.xl_sbid,qsdz from(SELECT (case when cxkglx < 10000000 then cxkglx * 100 else cxkglx end) as cxkglx,cxkg,sbzlx,oid,dydj,sbmc,sbid,qsdz FROM sxgis.v_t_tx_zwyc_dkx WHERE dydj IN(21,22,24) AND data_flag !=3 AND {0}    and qsdz is not null) A left JOIN(select cxkg, (case when cxkglx < 10000000 then cxkglx * 100 else cxkglx end) as cxkglx,ssdkx,sbid as xl_sbid,ROW_NUMBER() OVER(PARTITION BY cxkg, cxkglx) AS ROWS from sxgis.v_t_tx_zwyc_xl where sbzlx = 10000001 and dydj IN (21,22,24) AND data_flag !=3 AND {0}) B on A.cxkg = B.cxkg and A.cxkglx = B.cxkglx and A.oid = B.ssdkx and B.ROWS = 1) SELECT oid, ID, sbzlx, bdz_id, dydj, sbdydj, ssdz, xl_oid, xl_cxkg, xl_cxkglx, typeid, sbmc, sbid, xl_sbid, devicetype, rows FROM (SELECT B.oid, B.ID, B.sbzlx, A.oid AS bdz_id,(CASE B.dydj WHEN 21 THEN '6' WHEN 30 THEN '24' ELSE '10' END) AS dydj, B.dydj AS sbdydj,'' || A.sbzlx || A.oid AS ssdz, B.xl_oid, B.xl_cxkg, B.xl_cxkglx, B.typeid, B.sbmc, B.sbid, B.xl_sbid,1 AS devicetype, ROW_NUMBER() OVER(PARTITION BY B.xl_cxkg, B.xl_cxkglx ORDER BY B.sbmc) AS ROWS FROM bdz_info A INNER JOIN line_info B ON A.oid=B.qsdz UNION ALL SELECT to_char(CURRENT_DATE,'yyyy') || sbzlx || oid AS oid,'' || sbzlx || oid AS ID, sbzlx, oid AS bdz_id,(CASE dydj WHEN 25 THEN '35' WHEN 30 THEN '66' WHEN 33 THEN '220' ELSE '110' END) AS dydj, dydj AS sbdydj, sbid AS ssdz, NULL AS xl_oid, NULL AS xl_cxkg, NULL AS xl_cxkglx, NULL AS typeid, sbmc, sbid,null as xl_sbid,0 AS devicetype, ROW_NUMBER () OVER(PARTITION BY oid, sbzlx) AS ROWS FROM bdz_info) A ";
+        //包含shape
+        //public static string PG_QuerySql_Substation = "WITH bdz_info AS(SELECT oid, sbmc, sbid, sbzlx, dydj, shape FROM sxgis.v_t_tx_znyc_dz WHERE sbzlx= 30000000 AND dydj IN (25,30,32,33) AND data_flag !=3 AND {0}) SELECT oid, ID, sbzlx, bdz_id, dydj, sbdydj, ssdz, xl_oid, xl_cxkg, xl_cxkglx, typeid, sbmc, sbid, devicetype, shape, rows FROM (SELECT to_char(CURRENT_DATE,'yyyy') || B.cxkglx || B.cxkg AS oid,'' || B.cxkglx || B.cxkg AS ID,B.sbzlx,A.oid AS bdz_id,(CASE B.dydj WHEN 21 THEN '6' WHEN 30 THEN '24' ELSE '10' END) AS dydj, B.dydj AS sbdydj,'' || A.sbzlx || A.oid AS ssdz,B.oid AS xl_oid,B.cxkg AS xl_cxkg,B.cxkglx AS xl_cxkglx,B.cxkglx/100 AS typeid, B.sbmc,B.sbid,1 AS devicetype, cast(null as geometry) as shape,ROW_NUMBER() OVER(PARTITION BY B.cxkg, B.cxkglx ORDER BY B.sbmc) AS ROWS FROM bdz_info A INNER JOIN(SELECT (case when cxkglx < 10000000 then cxkglx * 100 else cxkglx end) as cxkglx,cxkg,sbzlx,oid,dydj,sbmc,sbid,qsdz FROM sxgis.v_t_tx_zwyc_dkx WHERE dydj IN(21,22,24) AND data_flag !=3 AND {0}) B ON A.oid=B.qsdz UNION ALL SELECT to_char(CURRENT_DATE,'yyyy') || sbzlx || oid AS oid,'' || sbzlx || oid AS ID, sbzlx, oid AS bdz_id,(CASE dydj WHEN 25 THEN '35' WHEN 30 THEN '66' WHEN 33 THEN '220' ELSE '110' END) AS dydj, dydj AS sbdydj, sbid AS ssdz, NULL AS xl_oid, NULL AS xl_cxkg, NULL AS xl_cxkglx, NULL AS typeid, sbmc, sbid,0 AS devicetype, shape, ROW_NUMBER () OVER (PARTITION BY oid, sbzlx) AS ROWS FROM bdz_info) A;";
+
+        //新版
+        public static string PG_QuerySql_Task = "WITH tmp AS (SELECT*FROM sxgis.t_task_info WHERE task_id=@param0)SELECT qy_id AS dwxh,task_id,ABS (MOD (hashtext (task_id),64)) AS hash_part,is_base,to_char(task_date,'yyyy-MM-dd hh24:mi:ss') AS topodate FROM tmp UNION ALL SELECT b.qy_id AS dwxh,A.task_id,ABS (MOD (hashtext (A.task_id),64)) AS hash_part,b.is_base,to_char(b.task_date,'yyyy-MM-dd hh24:mi:ss') AS topodate FROM sxgis.t_task_info A,tmp b WHERE A.ssbase=b.ssbase AND A.is_del='2' AND A.qy_id=b.qy_id AND A.task_date< b.task_date UNION ALL SELECT qy_id AS dwxh,ssbase,ABS (MOD (hashtext (ssbase),64)) AS hash_part,is_base,to_char(task_date,'yyyy-MM-dd hh24:mi:ss') AS topodate FROM tmp WHERE is_base='2' and ssbase is not null";
+        //public static string PG_QuerySql_Task = "WITH tmp AS ( SELECT*FROM sxgis.t_task_info WHERE task_id='{0}') SELECT qy_id AS dwxh,task_id,ABS (MOD (hashtext (task_id),64)) AS hash_part,is_base,to_char(task_date,'yyyy-MM-dd hh24:mi:ss') AS topodate FROM tmp UNION ALL SELECT b.qy_id AS dwxh,A.task_id,ABS (MOD (hashtext (A.task_id),64)) AS hash_part,b.is_base,to_char(b.task_date,'yyyy-MM-dd hh24:mi:ss') AS topodate FROM sxgis.t_task_info A,tmp b WHERE A.f_task_id=b.ssbase AND A.is_del='2' AND A.qy_id=b.qy_id UNION ALL SELECT b.qy_id AS dwxh,A.task_id,ABS (MOD (hashtext (A.task_id),64)) AS hash_part,b.is_base,to_char(b.task_date,'yyyy-MM-dd hh24:mi:ss') AS topodate FROM sxgis.t_task_info A,tmp b WHERE A.ssbase=b.ssbase AND A.is_del='2' AND A.qy_id=b.qy_id AND A.task_date< b.task_date";
+
+        public static string PG_QuerySql_ProvinceID = "select sg_code from ghdw.t_val_task_info_new_jc where task_id =@param0";
+
+        public static string PG_InsertSql
+        {
+            get
+            {
+                return "INSERT INTO topo_sb_oid (oid,equips,typeid,cxkg)VALUES(@param0,@param1,@param2,@param3)";
+            }
+        }
+        public static string PG_CreateTempTable_PDBYQ
+        {
+            get
+            {
+                return "create temporary table temp_znyc_pdbyq(oid bigint,sbzlx bigint,sfzg int2,sfzclj int2,ssfd bigint,ssfz bigint,ssdz bigint,ssdkx bigint) ;";
+            }
+        }
+
+        /// <summary>
+        /// 创建Oracle临时表
+        /// </summary>
+        public static string Oracle_CreateTempTable
+        {
+            get
+            {
+                return "create global temporary table topo_sb_line_sbid(type int,sbid varchar(200)) On Commit Preserve Rows";
+            }
+        }
+        public static string Oracle_CreateTempTable_1
+        {
+            get
+            {
+                return "create global temporary table temp_topo_sb_line_sbid(type int,sbid varchar(200),xl_sbid varchar(200),oid NUMBER(20)) On Commit Preserve Rows";
+            }
+        }
+        /// <summary>
+        /// 获取Docker容器环境变量
+        /// </summary>
+        /// <param name="key"></param>
+        /// <returns></returns> 
+        /// key只能是 TDDY_PG 研发环境、内网环境、生产环境PG数据库
+        /// TDDY_ORACLE  研发环境、内网环境、生产环境PG数据库
+        /// TDDY_TOPO_URL   研发环境、内网环境、生产环境拓扑服务接口地址
+        /// TDDY_LOAD_URL   生产环境负荷接口地址
+        public static string GetEnvironment(string key)
+        {
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                if (key == "TDDY_PG") return "Server=172.16.144.252;Port=19200;UserId=gis;Password=GIS20_sig;Database=fzgis;Encoding=UTF8;CommandTimeout=300;Pooling=true;MaxPoolSize=75;";
+                else if (key == "TDDY_PG_GH") return "Server=172.16.144.252;Port=19200;UserId=gis;Password=GIS20_sig;Database=fzgis_ghdw;Encoding=UTF8;CommandTimeout=300;Pooling=true;MaxPoolSize=75;";
+                else if (key == "TDDY_ORACLE") return "Data Source=(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=172.16.144.251)(PORT=11521))(CONNECT_DATA=(SERVICE_NAME=pis)));Persist Security Info=True;User ID=pis;Password=***;";
+                else if (key == "TDDY_TOPO_URL") return "http://172.16.144.246:21010/mygisserver/?request=SearchByCondition&equipparams=";
+                //else if (key == "TDDY_TOPO_URL") return "http://172.16.144.246:21011/mygisserver?request=SearchByCondition&equipparams=";//new
+                else if (key == "TDDY_TOPO_STATE") return "http://172.16.144.246/pis_gis_nav/rest/topopush/";
+                else if (key == "TDDY_PUBLISH_IP") return "http://27.196.92.55:9000/PowerInfo/pis_gh_xmk/rest/generate/testFile";
+                else if (key == "TDDY_LOAD_IP") return "http://localhost:8080/tddy/api/getDataNew_pdbyq?period={0}&ssdkx_oid={1}";//"http://49faa9d6b2f549ff9cd695990a034b82.apigateway.res.sgmc.sgcc.com.cn/ads_ast_pis_ieq_pde_dt_load_data_pdbyq?appCode=8cc524efb2a946cc9f325a25ea959839&pageNum=1&pageSize=2000&period={0}&ssdkx_oid={1}";
+                else return "http://localhost:8080/tddy/api/getData";//"http://20.32.224.217:7002/PowerInfo/teeinterface/rest/DppService/getData";
+            }
+            else
+            {
+                return Environment.GetEnvironmentVariable(key, EnvironmentVariableTarget.Process);
+            }
+        }
+
+        public static string Oracle_ExistTempTable
+        {
+            get
+            {
+                return "select count(1) from user_tables where table_name=upper('topo_sb_line_sbid')";
+            }
+        }
+        public static string Oracle_ExistTempTable_1
+        {
+            get
+            {
+                return "select count(1) from user_tables where table_name=upper('temp_topo_sb_line_sbid')";
+            }
+        }
+        public static string Oracle_ExistTable = "select count(1) from user_tables where table_name=upper('{0}')";
+        /// <summary>
+        /// 清空oracle临时表的数据
+        /// </summary>
+        public static string Oracle_ClearTempTable
+        {
+            get
+            {
+                return "truncate table topo_sb_line_sbid";
+            }
+        }
+
+        public static string Query_Columns { get { return "SELECT *  FROM {0} LIMIT 1"; } }
+        public static string Oracle_Query_Columns { get { return "SELECT *  FROM {0} where Rownum <= 1"; } }
+        public static string PG_Query_Trans { get { return "SELECT a.cxkg,a.oid,(CASE b.sbzlx WHEN 11000001 THEN '专用' WHEN 11000000 THEN '公用' ELSE '' END) 属性,b.sbzlx,a.oid AS ssdz,b.sbid,0 AS type FROM ( SELECT* FROM topo_sb_line_oid WHERE typeid = 110000) a INNER JOIN dwzy.T_TX_ZWYC_ZSBYQ b ON a.oid = b.oid AND b.sbzlx = '83020005' UNION ALL SELECT a.cxkg,a.oid,(CASE WHEN b.sbzlx IN(30200000,30200001,30200002) THEN '公用' ELSE '专用' END) 属性,b.sbzlx,b.ssdz,b.sbid,1 AS type FROM( SELECT * FROM topo_sb_line_oid WHERE typeid = 302000) a INNER JOIN dwzy.T_TX_ZNYC_PDBYQ b ON a.oid = b.oid"; } }
+        public static string Oracle_Query_Trans = "with pdss as (SELECT OBJ_ID,dwzy_id,pdrl,pdsx FROM (select OBJ_ID,(CASE WHEN ASSET_TYPE in ('60','70','80','90','100') THEN '专用' ELSE '公用' END) AS pdsx,cast(ratedmva*1000 as int) AS pdrl,dwzy_id,row_number () OVER (partition BY dwzy_id ORDER BY dwzy_id) AS num from equ_te_dist_trans B where B.SG_CODE =:param0 and exists(SELECT 1 FROM topo_sb_line_sbid A WHERE A.SBID IS NOT NULL and A.SBID = B.dwzy_id)) A WHERE num= 1) select * from pdss union SELECT OBJ_ID,dwzy_id,pdrl,pdsx FROM (select OBJ_ID,(CASE WHEN ASSET_TYPE in ('60','70','80','90','100') THEN '专用' ELSE '公用' END) AS pdsx,cast(ratedmva*1000 as int) AS pdrl,PMS_ID as dwzy_id,row_number () OVER (partition BY PMS_ID ORDER BY PMS_ID) AS num from equ_te_dist_trans B where B.SG_CODE =:param0 and exists(SELECT 1 FROM topo_sb_line_sbid A WHERE A.SBID IS NOT NULL and A.SBID = B.PMS_ID)) A WHERE num= 1";
+        #endregion
+
+        public static string Oracle_Query_XDDA { get { return "SELECT dwzy_id,dxjm,xlcd_1,zll FROM (SELECT dwzy_id,cast(sectional as int) AS dxjm,length/1000 as xlcd_1,zll,row_number() over (partition BY dwzy_id ORDER BY dwzy_id) AS num FROM equ_te_line_seg B where B.SG_CODE=:param0 AND exists(SELECT 1 FROM TOPO_SB_LINE_SBID A WHERE A.SBID IS NOT NULL and A.SBID=B.dwzy_id)) A WHERE num= 1"; } }
+        public static string Oracle_Query_XDDA_1 { get { return "SELECT dwzy_id,dxjm,xlcd_1,zll FROM (SELECT dwzy_id,cast(sectional as int) AS dxjm,length/1000 as xlcd_1,zll,row_number() over (partition BY dwzy_id ORDER BY dwzy_id) AS num FROM EQU_TE_LINE_SEGMENT B where B.SG_CODE=:param0 AND exists(SELECT 1 FROM TOPO_SB_LINE_SBID A WHERE A.SBID IS NOT NULL and A.SBID=B.dwzy_id)) A WHERE num= 1"; } }
+
+        #region Oracle
+        /// <summary>
+
+        //public static string Oracle_QuerySubSql { get { return "SELECT A.dwzy_id, A.run_trans_num, A.OBJ_ID, A.zrl, A.rlgc, C.max_load FROM ( SELECT A.dwzy_id, A.run_trans_num, A.VOLT_LEVEL, A.OBJ_ID, SUM (B.HVC) AS zrl, listagg ( rtrim( to_char (B.HVC, 'FM9999990.9999'), '.' ), '+' ) within GROUP (ORDER BY B.HVC) AS rlgc FROM EQU_PI_SUBSTATION A INNER JOIN EQU_TE_TRANSFORMER B ON A.dwzy_id IS NOT NULL AND A.OBJ_ID = B.STATION_ID AND A.VOLT_LEVEL IN ( 'AC00351', 'AC01101', 'AC02201' ) AND A.ASSET_TYPE = 30 GROUP BY A.dwzy_id, A.run_trans_num, A.VOLT_LEVEL, A.OBJ_ID ) A LEFT JOIN ieq_te_st_data_detail C ON A.OBJ_ID = C.DEVICE_ID AND periods = 2015"; } }
+
+        public static string Oracle_QueryFeederSql { get { return "with tem_dkxid as (select A.type,A.sbid,A.xl_sbid,A.oid,B.obj_id as dkx_obj_id from TEMP_TOPO_SB_LINE_SBID A left join equ_te_line_dkx B on A.sbid = B.dwzy_id) select oid, ssdkx, dwzy_id, obj_id, xlsx, xedl, LOAD, time_max,dept_code, LINE_TOTAL_LENGTH as xlcd,LINE_LENGTH as jkxcd,CABLE_LENGTH as dlxcd,USER_STATUS,area_type from(SELECT D.oid, A.ssdkx, A.dwzy_id, A.obj_id, A.xlsx, C.ratedmva*1000 as xedl,C.MAX_LOAD * 1000 AS LOAD, to_char(max_app_power_time, 'YYYY-MM-DD HH24:mi:ss') AS time_max, dept_code, LINE_TOTAL_LENGTH, LINE_LENGTH, CABLE_LENGTH, USER_STATUS, area_type, RANK() OVER(PARTITION by D.oid order by nvl(line_length, 0) + nvl(cable_length, 0) desc) AS num FROM(SELECT FEEDER_ID as ssdkx, dwzy_id, obj_id, (CASE WHEN ASSET_TYPE in ('60', '70', '80', '90', '100') THEN 0 ELSE 1 END) AS xlsx, gh_ssxgsid as dept_code, LINE_TOTAL_LENGTH, LINE_LENGTH, CABLE_LENGTH, USER_STATUS, area_type  FROM equ_te_line B where B.SG_CODE = :param0 and IS_BRANCH_LINE = '5' and exists(select 1 from tem_dkxid A WHERE A.TYPE = 1 AND((A.SBID IS NOT NULL and A.SBID = B.FEEDER_ID) or(A.XL_SBID IS NOT NULL and A.XL_SBID = B.DWZY_ID) or(A.dkx_obj_id IS NOT NULL and A.dkx_obj_id = B.FEEDER_ID)))) A LEFT JOIN(select Device_id, max_app_power_time, MAX_LOAD, ratedmva from ieq_pde_line_data_detail where SG_CODE = :param1 and PERIODS = :param2) C ON A.obj_id = C.Device_id left JOIN tem_dkxid D on A.ssdkx = D.SBID or A.ssdkx = D.dkx_obj_id or A.DWZY_ID = D.xl_sbid) A WHERE num = 1"; } }
+
+        public static string Oracle_Query_BDZDACX = "SELECT A.dwzy_id,(CASE WHEN A.ASSET_TYPE in ('60','70','80','90') THEN '专用' ELSE '公用' END) sbsx,(CASE A.SETUP_KIND WHEN '01' THEN '户外' WHEN '02' THEN '户内' WHEN '03' THEN '地下' WHEN '04' THEN '半地下' WHEN '05' THEN '半户内' ELSE '' END) AS sblx,A.run_trans_num zbts,A.zrl zbrl,A.rlgc,A.OBJ_ID FROM (SELECT A.dwzy_id,A.ASSET_TYPE,A.SETUP_KIND,A.run_trans_num,A.VOLT_LEVEL,A.OBJ_ID,SUM (B.HVC) AS zrl,listagg (rtrim(to_char(B.HVC,'FM9999990.9999'),'.'),'+') WITHIN GROUP (ORDER BY B.HVC) AS rlgc,RANK() OVER (PARTITION BY A.dwzy_id ORDER BY A.dwzy_id) AS num from (select A.dwzy_id,A.ASSET_TYPE,A.SETUP_KIND,A.run_trans_num,A.VOLT_LEVEL,A.OBJ_ID FROM EQU_PI_SUBSTATION A where A.SG_CODE=:param0 AND exists(select 1 from TOPO_SB_LINE_SBID C where C.SBID=A.dwzy_id)) A INNER JOIN EQU_TE_TRANSFORMER B ON B.SG_CODE=:param0 AND A.dwzy_id IS NOT NULL AND A.OBJ_ID=B.STATION_ID AND A.VOLT_LEVEL IN ('AC00351','AC00661','AC01101','AC02201') GROUP BY A.dwzy_id,A.ASSET_TYPE,A.SETUP_KIND,A.run_trans_num,A.VOLT_LEVEL,A.OBJ_ID)	A WHERE num=1";
+        #endregion
+        #region 结构对照
+        /// <summary>
+        /// 变电站字段对照
+        /// </summary>
+        public static Dictionary<Dictionary<string, Type>, string> dicContrastTopoBdz = new Dictionary<Dictionary<string, Type>, string> {
+            { new Dictionary<string,Type>{ { "oid", typeof(string) } },"oid" },
+            { new Dictionary<string,Type>{ { "id", typeof(string) } },"id" },
+            { new Dictionary<string,Type>{ { "sbmc", typeof(string) } },"sbmc" },
+             { new Dictionary<string,Type>{ { "dwxh", typeof(string) } },"dwxh" },
+              { new Dictionary<string,Type>{ { "year", typeof(int) } },"year" },
+            { new Dictionary<string,Type>{ { "dm_id", typeof(long) } },"bdz_id" },
+            { new Dictionary<string,Type>{ { "dwzy_id", typeof(string) } },"sbid" },
+            { new Dictionary<string,Type>{ { "sbsx", typeof(string) } },"SBSX" },
+            { new Dictionary<string,Type>{ { "sblx", typeof(string) } },"SBLX" },
+            { new Dictionary<string,Type>{ { "dydj", typeof(string) } },"DYDJ" },
+            { new Dictionary<string,Type>{ { "zbts", typeof(int) } },"ZBTS" },
+            { new Dictionary<string,Type>{ { "rlgc", typeof(string) } },"RLGC" },
+            { new Dictionary<string,Type>{ { "shape_id", typeof(string) } },"oid" },
+            { new Dictionary<string,Type>{ { "zbrl", typeof(decimal) } },"ZBRL" }
+        };
+        public static Dictionary<Dictionary<string, Type>, string> dicContrastOracleTempTable
+        {
+            get
+            {
+                return new Dictionary<Dictionary<string, Type>, string> {
+            { new Dictionary<string,Type>{ { "sbid", typeof(string) } },"sbid" },
+            { new Dictionary<string,Type>{ { "type", typeof(int) } },"devicetype" }
+        };
+            }
+        }
+        public static Dictionary<Dictionary<string, Type>, string> dicContrastOracleTempTable_1
+        {
+            get
+            {
+                return new Dictionary<Dictionary<string, Type>, string> {
+            { new Dictionary<string,Type>{ { "sbid", typeof(string) } },"sbid" },
+            { new Dictionary<string,Type>{ { "type", typeof(int) } },"devicetype" },
+                    { new Dictionary<string,Type>{ { "xl_sbid", typeof(string) } },"xl_sbid" },
+                    { new Dictionary<string,Type>{ { "oid", typeof(long) } },"xl_oid" }
+        };
+            }
+        }
+        public static Dictionary<Dictionary<string, Type>, string> dicContrastOracleTempTableXDXX_1
+        {
+            get
+            {
+                return new Dictionary<Dictionary<string, Type>, string> {
+            { new Dictionary<string,Type>{ { "sbid", typeof(string) } },"sbid" }
+        };
+            }
+        }
+
+        public static string DeleteTaskInfo = "delete from wjfx.t_task_info where task_id=@param0";
+
+        public static string Oracle_QueryGrid = "select ID, AREA_NO as area_name,AREA_DIVIDE_ID,LOAD_DENSITY from GH_PAD_ELECTRO_AREA_STATS where dwqy = :param0 union all select ID, AREA_NO, AREA_DIVIDE_ID, LOAD_DENSITY from GH_PAD_ELECTRO_GIRD_STATS where dwqy = :param0 union all select ID, LAND_TYPE_CODE, AREA_DIVIDE_ID, LOAD_DENSITY from GH_PAD_USE_UNIT_STATS where dwqy = :param0 union all select ID,AREA_NO,AREA_DIVIDE_ID,LOAD_DENSITY from GH_PAD_ELECTRO_UNION_AREA where dwqy = :param0";
+
+        //添加shape
+        //public static string PG_Query_Switch { get { return "SELECT to_char(current_date,'yyyy') || C.sbzlx || A.oid AS oid,''||C.sbzlx || A.oid AS id,C.oid as dm_id,'{1}' AS dwxh, to_char(current_date, 'yyyy') :: int AS year,A.cxkg,A.cxkglx,''||A.cxkglx || A.cxkg AS ssxl,A.typeid,C.sbzlx,(((0 :: bit(64)) | get_byte(B.connection,1) :: bit(64)<< 0) | (get_byte (B.connection,2) :: bit(64)<< 8) | (get_byte (B.connection,3) :: bit(64)<< 16) | (get_byte (B.connection,4) :: bit(64)<< 24) | (get_byte (B.connection,5) :: bit(64)<< 32) | (get_byte (B.connection,6) :: bit(64)<< 40) | (get_byte (B.connection,7) :: bit(64)<< 48) | (get_byte (B.connection,8) :: bit(64)<< 56)) :: int8 AS start_conn,B.ssdz,(CASE WHEN C.sbzlx IN (30000004,32400000,20400000) THEN 4 ELSE 5 END) AS devicetype,(CASE WHEN C.sbzlx = 30000004 THEN '开关站' WHEN C.sbzlx = 32400000 THEN '环网单元' WHEN C.sbzlx = 20400000 THEN '电缆分支箱' WHEN C.sbzlx = 32300000 THEN '箱变' ELSE '配电室' END) AS TYPE,(CASE WHEN C.sbzlx = 30000004 THEN '三遥开关站' WHEN C.sbzlx = 32400000 THEN '三遥环网单元' WHEN C.sbzlx = 20400000 THEN '电缆分支箱' WHEN C.sbzlx = 32300000 THEN '箱变' ELSE '配电室' END) AS blackname, C.sbmc AS devicename,c.sbid,A.xl_oid,shape,row_number() over(partition BY B.ssdz) AS ROWS FROM(SELECT* FROM topo_sb_line_oid WHERE typeid= 311000) A INNER JOIN(SELECT oid, connection, ssdz FROM sxgis.v_t_tx_znyc_mx WHERE data_flag !=3 AND {0}) B ON A.oid=B.oid INNER JOIN(SELECT oid, sbzlx, sbmc, sbid, shape FROM sxgis.v_t_tx_znyc_DZ WHERE sbzlx IN (30000004,32400000,20400000,32300000,30000005,30000006,34300000) AND data_flag !=3 AND {0}) C ON B.ssdz=C.oid;"; } }
+        public static string Oracle_Query_Switch = "SELECT DISTINCT dwzy_id,(CASE WHEN PDAI_TYPE='3' THEN '三遥' WHEN PDAI_TYPE='2' THEN '动作型二遥' ELSE '未配置终端' END) AS ZDHFS,(CASE WHEN ASSET_TYPE in ('60','70','80','90','100') OR SWITCH_FUNC=4 THEN 1 ELSE 0 END) AS YHFJ FROM equ_te_breaker B where B.SG_CODE=:param0 and exists(SELECT 1 FROM topo_sb_line_sbid A WHERE A.TYPE= 3 AND A.SBID IS NOT NULL and A.SBID= B.dwzy_id) UNION ALL SELECT DISTINCT dwzy_id,(CASE WHEN PDAI_TYPE = '3' THEN '三遥' WHEN PDAI_TYPE = '2' THEN '动作型二遥' ELSE '未配置终端' END) AS ZDHFS,(CASE WHEN ASSET_TYPE in ('60', '70', '80', '90', '100') OR SWITCH_FUNC = 4 THEN 1 ELSE 0 END) AS YHFJ FROM equ_te_dis_switch B where B.SG_CODE=:param1 AND exists(SELECT 1 FROM topo_sb_line_sbid A WHERE A.TYPE= 3 AND A.SBID IS NOT NULL and A.SBID= B.dwzy_id) UNION ALL SELECT DISTINCT dwzy_id,(CASE WHEN PDAI_TYPE = '3' THEN '三遥' WHEN PDAI_TYPE = '2' THEN '动作型二遥' ELSE '未配置终端' END) AS ZDHFS,(CASE WHEN ASSET_TYPE in ('60', '70', '80', '90', '100') THEN 1 ELSE 0 END) AS YHFJ FROM equ_pi_dn_room B where B.SG_CODE=:param2 AND exists(SELECT 1 FROM topo_sb_line_sbid A WHERE A.TYPE= 4 AND A.SBID IS NOT NULL and A.SBID= B.dwzy_id)";
+        public static string Oracle_Query_Switch_ZSKG = "SELECT DISTINCT dwzy_id,(CASE WHEN PDAI_TYPE='3' THEN '三遥' WHEN PDAI_TYPE='2' THEN '动作型二遥' ELSE '未配置终端' END) AS ZDHFS,(CASE WHEN ASSET_TYPE in ('60','70','80','90','100') OR SWITCH_FUNC=4 THEN 1 ELSE 0 END) AS YHFJ FROM equ_te_breaker B where B.SG_CODE=:param0 and exists(SELECT 1 FROM topo_sb_line_sbid A WHERE A.SBID IS NOT NULL and A.SBID= B.dwzy_id) union all SELECT DISTINCT dwzy_id,(CASE WHEN PDAI_TYPE = '3' THEN '三遥' WHEN PDAI_TYPE = '2' THEN '动作型二遥' ELSE '未配置终端' END) AS ZDHFS,(CASE WHEN ASSET_TYPE in ('60', '70', '80', '90', '100') OR SWITCH_FUNC = 4 THEN 1 ELSE 0 END) AS YHFJ FROM equ_te_dis_switch B where B.SG_CODE=:param0 AND exists(SELECT 1 FROM topo_sb_line_sbid A WHERE A.SBID IS NOT NULL and A.SBID= B.dwzy_id)";
+        public static string Oracle_Query_Switch_HWDY = " SELECT DISTINCT dwzy_id,(CASE WHEN PDAI_TYPE = '3' THEN '三遥' WHEN PDAI_TYPE = '2' THEN '动作型二遥' ELSE '未配置终端' END) AS ZDHFS,(CASE WHEN ASSET_TYPE in ('60', '70', '80', '90', '100') THEN 1 ELSE 0 END) AS YHFJ FROM equ_pi_dn_room B where B.SG_CODE=:param0 AND exists(SELECT 1 FROM topo_sb_line_sbid A WHERE A.SBID IS NOT NULL and A.SBID= B.dwzy_id)";
+        public static string PG_Insert_Trans = "INSERT INTO topo_pdss (oid,dwxh,year,id,sbmc,pdsx,pdlx,pdts,pdrl,dm_id,dwzy_id) SELECT to_char(current_date,'yyyy') || sbzlx || oid AS oid,dwxh,year,'' || sbzlx || oid AS id,devicename,pdsx,'柱上变' AS pdlx,1 AS pdts,pdrl,oid AS dm_id,sbid AS dwzy_id FROM topo_pdss WHERE ssdz=0 UNION ALL SELECT to_char(current_date,'yyyy') || B.sbzlx || B.oid AS oid,dwxh,year,'' || B.sbzlx || B.oid AS id,B.sbmc,(CASE WHEN sbzlx=30000006 THEN '专用' ELSE '公用' END),'配电室' AS pdlx,pbts,pbrl,B.oid AS dm_id,B.sbid AS dwzy_id FROM (SELECT dwxh,year,ssdz,sum(pdrl) AS pbrl,count(pdrl) AS pbts FROM topo_pdss WHERE ssdz> 0 GROUP BY ssdz,dwxh,year) A INNER JOIN (SELECT oid,sbzlx,sbmc,sbid FROM sxgis.v_T_TX_ZNYC_DZ WHERE (sbzlx=30000006 OR sbzlx=30000005) AND data_flag !=3 AND {0}) B ON A.ssdz=B.oid UNION ALL SELECT to_char(current_date,'yyyy') || B.sbzlx || B.oid AS oid,dwxh,year,'' || B.sbzlx || B.oid AS id,B.sbmc,'公用','箱变' AS pdlx,pbts,pbrl,B.oid AS dm_id,B.sbid AS dwzy_id FROM (SELECT dwxh,year,ssdz,sum(pdrl) AS pbrl,count(pdrl) AS pbts FROM topo_pdss WHERE ssdz> 0 GROUP BY ssdz,dwxh,year) A INNER JOIN (SELECT oid,sbzlx,sbmc,sbid FROM sxgis.v_T_TX_ZNYC_DZ B WHERE sbzlx=32300000 AND data_flag !=3 AND {0}) B ON A.ssdz=B.oid";
+
+        /// <summary>
+        /// 参数：task_id
+        /// </summary>
+        public static string PG_Update_ZWYC_XL = "WITH dkx_lx AS (SELECT oid, (CASE WHEN zgjkxcd = 0 AND zgdlxcd > 0 AND NOT EXISTS(SELECT 1 FROM wjfx.t_tx_zwyc_zsdlq WHERE task_id = '{0}' AND ssdkx = A.oid AND sfzg = 1) AND NOT EXISTS(SELECT 1 FROM wjfx.t_tx_zwyc_zsfhkg WHERE task_id = '{0}' AND ssdkx = A.oid AND sfzg = 1) THEN 1 ELSE 0 END) AS xllx, lllx, llzlx FROM wjfx.t_tx_zwyc_dkx A WHERE task_id= '{0}' AND check_info IN (0,1)) UPDATE wjfx.t_tx_zwyc_dkx SET dwjg = A.dwjg, xllx= A.xllx FROM (SELECT oid, xllx,(CASE WHEN xllx= 0 AND lllx = 0 THEN 1 WHEN xllx = 0 AND (lllx= 1 OR lllx = 2) THEN 2 WHEN xllx = 0 AND(lllx= 3 OR lllx = 4) THEN 3 WHEN xllx = 0 AND(lllx= 5 OR lllx = 6) THEN 4 WHEN xllx = 0 THEN 5 WHEN lllx = 0 AND llzlx = 0 THEN 6 WHEN lllx = 0 AND llzlx>0 THEN 7 WHEN lllx IN(1,2) THEN 9 WHEN llzlx IN(6,7) THEN 10 ELSE 13 END) AS dwjg FROM dkx_lx) A WHERE t_tx_zwyc_dkx.task_id='{0}' AND t_tx_zwyc_dkx.oid=A.oid;";
+        /// <summary>
+        /// 参数：
+        /// 1、task_id
+        /// 2、parameter
+        /// </summary>
+        public static string PG_Insert_ZNYC_DZ = "INSERT INTO wjfx.T_TX_ZNYC_DZ (oid,sbzlx,ssdkx,sfzg,sfzclj,ssfd,ssfz,task_id) SELECT ssdz,sbzlx,ssdkx,sfzg,sfzclj,ssfd,ssfz,@param2 AS task_id FROM (SELECT A.ssdz,b.sbzlx,A.ssdkx,A.sfzg,A.sfzclj,A.ssfd,A.ssfz,ROW_NUMBER () OVER (PARTITION BY A.ssdz ORDER BY num DESC) AS ROWS FROM (SELECT ssdz,ssdkx,sfzg,sfzclj,ssfd,ssfz,COUNT (oid) num FROM wjfx.t_tx_znyc_pdbyq where task_id = @param2  GROUP BY ssdz,ssdkx,sfzg,sfzclj,ssfd,ssfz) A INNER JOIN  (SELECT oid,sbzlx FROM sxgis.V_T_TX_ZNYC_DZ B WHERE not exists(select 1 from wjfx.t_tx_znyc_dz A where task_id = @param2 and A.oid = B.oid) AND data_flag !=3 AND {0}) b  ON A.ssdz=b.oid) A WHERE ROWS= 1";
+
+
+        /*
+         * 相关sql拆分
+         * */
+        //typeid = 201000 
+        internal static string PG_Query_ZWYC_DLD = "SELECT oid,dydj,ssdkx,(((0 :: BIT (64)) | get_byte(CONNECTION,1) :: BIT (64)<< 0) | (get_byte(CONNECTION,2) :: BIT (64)<< 8) | (get_byte(CONNECTION,3) :: BIT(64)<< 16) | (get_byte(CONNECTION,4) :: BIT(64)<< 24) | (get_byte(CONNECTION,5) :: BIT (64)<< 32) | (get_byte(CONNECTION,6) :: BIT(64)<< 40) | (get_byte(CONNECTION,7) :: BIT(64)<< 48) | (get_byte(CONNECTION,8) :: BIT(64)<< 56)) :: int8 AS start_conn,(case when length(CONNECTION) < 17 then 0 else (((0 :: BIT(64)) | get_byte(CONNECTION, 9) :: BIT(64) << 0) | (get_byte(CONNECTION, 10) :: BIT(64) << 8) | (get_byte(CONNECTION, 11) :: BIT(64) << 16) | (get_byte(CONNECTION, 12) :: BIT(64) << 24) | (get_byte(CONNECTION, 13) :: BIT(64) << 32) | (get_byte(CONNECTION, 14) :: BIT(64) << 40) | (get_byte(CONNECTION, 15) :: BIT(64) << 48) | (get_byte(CONNECTION, 16) :: BIT(64) << 56)) :: int8 end) AS end_conn,sbzlx,sbid,'中压电缆' as type,(case when st_length(shape) > 50000 then 0 else st_length(shape)/1000 end) AS xlcd FROM sxgis.V_T_TX_ZWYC_DLD WHERE data_flag !=3 AND {0} and length(CONNECTION) > 9";
+        //typeid = 101000
+        internal static string PG_Query_ZWYC_DXD = "SELECT oid,dydj,ssdkx,(((0 :: BIT (64)) | get_byte(CONNECTION,1) :: BIT (64)<< 0) | (get_byte(CONNECTION,2) :: BIT (64)<< 8) | (get_byte(CONNECTION,3) :: BIT(64)<< 16) | (get_byte(CONNECTION,4) :: BIT(64)<< 24) | (get_byte(CONNECTION,5) :: BIT (64)<< 32) | (get_byte(CONNECTION,6) :: BIT(64)<< 40) | (get_byte(CONNECTION,7) :: BIT(64)<< 48) | (get_byte(CONNECTION,8) :: BIT(64)<< 56)) :: int8 AS start_conn,(case when length(CONNECTION) < 17 then 0 else (((0 :: BIT(64)) | get_byte(CONNECTION, 9) :: BIT(64) << 0) | (get_byte(CONNECTION, 10) :: BIT(64) << 8) | (get_byte(CONNECTION, 11) :: BIT(64) << 16) | (get_byte(CONNECTION, 12) :: BIT(64) << 24) | (get_byte(CONNECTION, 13) :: BIT(64) << 32) | (get_byte(CONNECTION, 14) :: BIT(64) << 40) | (get_byte(CONNECTION, 15) :: BIT(64) << 48) | (get_byte(CONNECTION, 16) :: BIT(64) << 56)) :: int8 end) AS end_conn,sbzlx,'中压架空' as type,(case when st_length(shape) > 50000 then 0 else st_length(shape)/1000 end) AS xlcd,ssdx FROM sxgis.V_T_TX_ZWYC_DXD WHERE data_flag !=3 AND {0} and length(CONNECTION) > 9";
+        internal static string PG_Query_ZWYC_DX = "SELECT oid as dx_oid, sbid from sxgis.V_T_TX_ZWYC_DXD WHERE data_flag !=3 AND {0}";
+        //typeid = 140000
+        internal static string PG_Query_ZWYC_ZWCLJX = "SELECT oid,dydj,ssdkx,(((0 :: BIT(64)) | get_byte(CONNECTION, 1) :: BIT(64) << 0) | (get_byte(CONNECTION, 2) :: BIT(64) << 8) | (get_byte(CONNECTION, 3) :: BIT(64) << 16) | (get_byte(CONNECTION, 4) :: BIT(64) << 24) | (get_byte(CONNECTION, 5) :: BIT(64) << 32) | (get_byte(CONNECTION, 6) :: BIT(64) << 40) | (get_byte(CONNECTION, 7) :: BIT(64) << 48) | (get_byte(CONNECTION, 8) :: BIT(64) << 56)) :: int8 AS start_conn,(case when length(CONNECTION) < 17 then 0 else (((0 :: BIT(64)) | get_byte(CONNECTION,9) :: BIT(64)<< 0) | (get_byte(CONNECTION,10) :: BIT(64)<< 8) | (get_byte(CONNECTION,11) :: BIT(64)<< 16) | (get_byte(CONNECTION,12) :: BIT(64)<< 24) | (get_byte(CONNECTION,13) :: BIT(64)<< 32) | (get_byte(CONNECTION,14) :: BIT(64)<< 40) | (get_byte(CONNECTION,15) :: BIT(64)<< 48) | (get_byte(CONNECTION,16) :: BIT(64)<< 56)) :: int8 end) AS end_conn, sbzlx FROM sxgis.V_T_TX_ZWYC_ZWCLJX WHERE data_flag !=3 AND {0} and length(CONNECTION) > 9";
+        //typeid = 130000 
+        internal static string PG_Query_ZWYC_ZWLJX = "SELECT oid,dydj,ssdkx,(((0 :: BIT (64)) | get_byte(CONNECTION,1) :: BIT(64)<< 0) | (get_byte(CONNECTION,2) :: BIT(64)<< 8) | (get_byte(CONNECTION,3) :: BIT (64)<< 16) | (get_byte(CONNECTION,4) :: BIT(64)<< 24) | (get_byte(CONNECTION,5) :: BIT (64)<< 32) | (get_byte(CONNECTION,6) :: BIT(64)<< 40) | (get_byte(CONNECTION,7) :: BIT(64)<< 48) | (get_byte(CONNECTION,8) :: BIT(64)<< 56)) :: int8 AS start_conn,(case when length(CONNECTION) < 17 then 0 else (((0 :: BIT(64)) | get_byte(CONNECTION,9) :: BIT(64)<< 0) | (get_byte(CONNECTION,10) :: BIT(64)<< 8) | (get_byte(CONNECTION,11) :: BIT(64)<< 16) | (get_byte(CONNECTION,12) :: BIT(64)<< 24) | (get_byte(CONNECTION,13) :: BIT(64)<< 32) | (get_byte(CONNECTION,14) :: BIT(64)<< 40) | (get_byte(CONNECTION,15) :: BIT(64)<< 48) | (get_byte(CONNECTION,16) :: BIT(64)<< 56)) :: int8 end) AS end_conn, sbzlx FROM sxgis.V_T_TX_ZWYC_ZWLJX WHERE data_flag !=3 AND {0} and length(CONNECTION) > 9";
+        //typeid = 111000 
+        internal static string PG_Query_ZWYC_ZSDLQ = "SELECT oid,dydj,ssdkx,(((0 :: BIT(64)) | get_byte(CONNECTION,1) :: BIT(64)<< 0) | (get_byte(CONNECTION,2) :: BIT(64)<< 8) | (get_byte(CONNECTION,3) :: BIT(64)<< 16) | (get_byte(CONNECTION,4) :: BIT(64)<< 24) | (get_byte(CONNECTION,5) :: BIT(64)<< 32) | (get_byte(CONNECTION,6) :: BIT(64)<< 40) | (get_byte(CONNECTION,7) :: BIT(64)<< 48) | (get_byte(CONNECTION,8) :: BIT(64)<< 56)) :: int8 AS start_conn,(case when length(CONNECTION) < 17 then 0 else (((0 :: BIT(64)) | get_byte(CONNECTION,9) :: BIT(64)<< 0) | (get_byte(CONNECTION,10) :: BIT(64)<< 8) | (get_byte(CONNECTION,11) :: BIT(64)<< 16) | (get_byte(CONNECTION,12) :: BIT(64)<< 24) | (get_byte(CONNECTION,13) :: BIT(64)<< 32) | (get_byte(CONNECTION,14) :: BIT(64)<< 40) | (get_byte(CONNECTION,15) :: BIT(64)<< 48) | (get_byte(CONNECTION,16) :: BIT(64)<< 56)) :: int8 end) AS end_conn, sbzlx,ckzt,sbid,sbmc as devicename,'柱上开关' as type,3 as devicetype,'未配置终端柱上开关' as blackname FROM sxgis.V_T_TX_ZWYC_ZSDLQ WHERE data_flag !=3 AND {0} AND LENGTH (CONNECTION)> 8";
+        //typeid = 112000 
+        internal static string PG_Query_ZWYC_ZSFHKG = "SELECT oid,dydj,ssdkx,(((0 :: BIT(64)) | get_byte(CONNECTION, 1) :: BIT(64) << 0) | (get_byte(CONNECTION, 2) :: BIT(64) << 8) | (get_byte(CONNECTION, 3) :: BIT(64) << 16) | (get_byte(CONNECTION, 4) :: BIT(64) << 24) | (get_byte(CONNECTION, 5) :: BIT(64) << 32) | (get_byte(CONNECTION, 6) :: BIT(64) << 40) | (get_byte(CONNECTION, 7) :: BIT(64) << 48) | (get_byte(CONNECTION, 8) :: BIT(64) << 56)) :: int8 AS start_conn,(case when length(CONNECTION) < 17 then 0 else (((0 :: BIT(64)) | get_byte(CONNECTION,9) :: BIT(64)<< 0) | (get_byte(CONNECTION,10) :: BIT(64)<< 8) | (get_byte(CONNECTION,11) :: BIT(64)<< 16) | (get_byte(CONNECTION,12) :: BIT(64)<< 24) | (get_byte(CONNECTION,13) :: BIT(64)<< 32) | (get_byte(CONNECTION,14) :: BIT(64)<< 40) | (get_byte(CONNECTION,15) :: BIT(64)<< 48) | (get_byte(CONNECTION,16) :: BIT(64)<< 56)) :: int8 end) AS end_conn, sbzlx,ckzt,sbmc as devicename,'柱上开关' as type,3 as devicetype,'未配置终端柱上开关' as blackname FROM sxgis.V_T_TX_ZWYC_ZSFHKG WHERE data_flag !=3 AND {0} AND LENGTH (CONNECTION)> 8";
+        //typeid = 114000
+        internal static string PG_Query_ZWYC_ZSCHQ = "SELECT oid,dydj,ssdkx,(((0 :: BIT(64)) | get_byte(CONNECTION,1) :: BIT(64)<< 0) | (get_byte(CONNECTION,2) :: BIT(64)<< 8) | (get_byte(CONNECTION,3) :: BIT(64)<< 16) | (get_byte(CONNECTION,4) :: BIT(64)<< 24) | (get_byte(CONNECTION,5) :: BIT(64)<< 32) | (get_byte(CONNECTION,6) :: BIT(64)<< 40) | (get_byte(CONNECTION,7) :: BIT(64)<< 48) | (get_byte(CONNECTION,8) :: BIT(64)<< 56)) :: int8 AS start_conn,(case when length(CONNECTION) < 17 then 0 else (((0 :: BIT(64)) | get_byte(CONNECTION,9) :: BIT(64)<< 0) | (get_byte(CONNECTION,10) :: BIT(64)<< 8) | (get_byte(CONNECTION,11) :: BIT(64)<< 16) | (get_byte(CONNECTION,12) :: BIT(64)<< 24) | (get_byte(CONNECTION,13) :: BIT(64)<< 32) | (get_byte(CONNECTION,14) :: BIT(64)<< 40) | (get_byte(CONNECTION,15) :: BIT(64)<< 48) | (get_byte(CONNECTION,16) :: BIT(64)<< 56)) :: int8 end) AS end_conn, sbzlx,ckzt,sbmc as devicename,'柱上开关' as type,3 as devicetype,'未配置终端柱上开关' as blackname FROM sxgis.V_T_TX_ZWYC_ZSCHQ WHERE data_flag !=3 AND {0} AND LENGTH (CONNECTION)> 8";
+        //typeid = 110000
+        internal static string PG_Query_ZWYC_ZSBYQ = "SELECT oid,dydj,ssdkx,(((0 :: BIT(64)) | get_byte(CONNECTION,1) :: BIT(64)<< 0) | (get_byte(CONNECTION,2) :: BIT(64)<< 8) | (get_byte(CONNECTION,3) :: BIT(64)<< 16) | (get_byte(CONNECTION,4) :: BIT(64)<< 24) | (get_byte(CONNECTION,5) :: BIT(64)<< 32) | (get_byte(CONNECTION,6) :: BIT(64)<< 40) | (get_byte(CONNECTION,7) :: BIT(64)<< 48) | (get_byte(CONNECTION,8) :: BIT(64)<< 56)) :: int8 AS start_conn,(CASE WHEN LENGTH(CONNECTION) > 19 THEN(((0 :: BIT (64)) | get_byte(CONNECTION,17) :: BIT(64)<< 0) | (get_byte(CONNECTION,18) :: BIT(64)<< 8) | (get_byte(CONNECTION,19) :: BIT(64)<< 16) | (get_byte(CONNECTION,20) :: BIT(64)<< 24) | (get_byte(CONNECTION,21) :: BIT(64)<< 32) | (get_byte(CONNECTION,22) :: BIT(64)<< 40) | (get_byte(CONNECTION,23) :: BIT(64)<< 48) | (get_byte(CONNECTION,24) :: BIT(64)<< 56)) :: int8 when length(CONNECTION) < 17 then 0 ELSE(((0 :: BIT (64)) | get_byte(CONNECTION,9) :: BIT(64)<< 0) | (get_byte(CONNECTION,10) :: BIT(64)<< 8) | (get_byte(CONNECTION,11) :: BIT(64)<< 16) | (get_byte(CONNECTION,12) :: BIT(64)<< 24) | (get_byte(CONNECTION,13) :: BIT(64)<< 32) | (get_byte(CONNECTION,14) :: BIT(64)<< 40) | (get_byte(CONNECTION,15) :: BIT(64)<< 48) | (get_byte(CONNECTION,16) :: BIT(64)<< 56)) :: int8 END) AS end_conn, sbzlx, sbid, sbmc as devicename,'柱上变' as blackname, 5 as devicetype FROM sxgis.V_t_tx_zwyc_zsbyq WHERE data_flag !=3 AND {0} and length(CONNECTION) > 8";
+        //typeid = 302000
+        internal static string PG_Query_ZNYC_PDBYQ = "SELECT oid,dydj,ssdkx,(((0 :: BIT(64)) | get_byte(CONNECTION,1) :: BIT(64)<< 0) | (get_byte(CONNECTION,2) :: BIT(64)<< 8) | (get_byte(CONNECTION,3) :: BIT(64)<< 16) | (get_byte(CONNECTION,4) :: BIT(64)<< 24) | (get_byte(CONNECTION,5) :: BIT(64)<< 32) | (get_byte(CONNECTION,6) :: BIT (64)<< 40) | (get_byte(CONNECTION,7) :: BIT (64)<< 48) | (get_byte(CONNECTION,8) :: BIT (64)<< 56)) :: int8 AS start_conn,(case when length(CONNECTION) < 17 then 0 else (((0 :: BIT(64)) | get_byte(CONNECTION, 9) :: BIT(64) << 0) | (get_byte(CONNECTION, 10) :: BIT(64) << 8) | (get_byte(CONNECTION, 11) :: BIT(64) << 16) | (get_byte(CONNECTION, 12) :: BIT(64) << 24) | (get_byte(CONNECTION, 13) :: BIT(64) << 32) | (get_byte(CONNECTION, 14) :: BIT(64) << 40) | (get_byte(CONNECTION, 15) :: BIT(64) << 48) | (get_byte(CONNECTION, 16) :: BIT(64) << 56)) :: int8 end) AS end_conn, sbzlx, sbid, sbmc as devicename, ssdz, 5 as devicetype FROM sxgis.V_T_TX_ZNYC_PDBYQ WHERE data_flag !=3 AND {0} AND length(CONNECTION) > 8";
+        //typeid = 113000
+        internal static string PG_Query_ZWYC_ZSGLKG = "SELECT oid,dydj,ssdkx,(((0 :: BIT(64)) | get_byte(CONNECTION,1) :: BIT(64)<< 0) | (get_byte(CONNECTION,2) :: BIT(64)<< 8) | (get_byte(CONNECTION,3) :: BIT(64)<< 16) | (get_byte(CONNECTION,4) :: BIT(64)<< 24) | (get_byte(CONNECTION,5) :: BIT(64)<< 32) | (get_byte(CONNECTION,6) :: BIT(64)<< 40) | (get_byte(CONNECTION,7) :: BIT(64)<< 48) | (get_byte(CONNECTION,8) :: BIT(64)<< 56)) :: int8 AS start_conn,(case when length(CONNECTION) < 17 then 0 else (((0 :: BIT(64)) | get_byte(CONNECTION,9) :: BIT(64)<< 0) | (get_byte(CONNECTION,10) :: BIT(64)<< 8) | (get_byte(CONNECTION,11) :: BIT(64)<< 16) | (get_byte(CONNECTION,12) :: BIT(64)<< 24) | (get_byte(CONNECTION,13) :: BIT(64)<< 32) | (get_byte(CONNECTION,14) :: BIT(64)<< 40) | (get_byte(CONNECTION,15) :: BIT(64)<< 48) | (get_byte(CONNECTION,16) :: BIT(64)<< 56)) :: int8 end) AS end_conn,sbzlx FROM sxgis.V_T_TX_ZWYC_ZSGLKG WHERE data_flag !=3 AND {0} and length(CONNECTION) > 8";
+        //typeid = 115000
+        internal static string PG_Query_ZWYC_ZSDLSRDQ = "SELECT oid,dydj,ssdkx,(((0 :: BIT(64)) | get_byte(CONNECTION,1) :: BIT(64)<< 0) | (get_byte(CONNECTION,2) :: BIT(64)<< 8) | (get_byte(CONNECTION,3) :: BIT(64)<< 16) | (get_byte(CONNECTION,4) :: BIT(64)<< 24) | (get_byte(CONNECTION,5) :: BIT(64)<< 32) | (get_byte(CONNECTION,6) :: BIT(64)<< 40) | (get_byte(CONNECTION,7) :: BIT(64)<< 48) | (get_byte(CONNECTION,8) :: BIT(64)<< 56)) :: int8 AS start_conn,(case when length(CONNECTION) < 17 then 0 else (((0 :: BIT(64)) | get_byte(CONNECTION,9) :: BIT(64)<< 0) | (get_byte(CONNECTION,10) :: BIT(64)<< 8) | (get_byte(CONNECTION,11) :: BIT(64)<< 16) | (get_byte(CONNECTION,12) :: BIT(64)<< 24) | (get_byte(CONNECTION,13) :: BIT(64)<< 32) | (get_byte(CONNECTION,14) :: BIT(64)<< 40) | (get_byte(CONNECTION,15) :: BIT(64)<< 48) | (get_byte(CONNECTION,16) :: BIT(64)<< 56)) :: int8 end) AS end_conn,sbzlx FROM sxgis.V_T_TX_ZWYC_ZSDLSRDQ WHERE data_flag !=3 AND {0} and length(CONNECTION) > 8";
+        //typeid = 119000
+        internal static string PG_Query_ZWYC_ZSDRQ = "SELECT oid,dydj,ssdkx,(((0 :: BIT(64)) | get_byte(CONNECTION,1) :: BIT(64)<< 0) | (get_byte(CONNECTION,2) :: BIT(64)<< 8) | (get_byte(CONNECTION,3) :: BIT(64)<< 16) | (get_byte(CONNECTION,4) :: BIT(64)<< 24) | (get_byte(CONNECTION,5) :: BIT(64)<< 32) | (get_byte(CONNECTION,6) :: BIT(64)<< 40) | (get_byte(CONNECTION,7) :: BIT(64)<< 48) | (get_byte(CONNECTION,8) :: BIT(64)<< 56)) :: int8 AS start_conn,(case when length(CONNECTION) < 17 then 0 else (((0 :: BIT(64)) | get_byte(CONNECTION,9) :: BIT(64)<< 0) | (get_byte(CONNECTION,10) :: BIT(64)<< 8) | (get_byte(CONNECTION,11) :: BIT(64)<< 16) | (get_byte(CONNECTION,12) :: BIT(64)<< 24) | (get_byte(CONNECTION,13) :: BIT(64)<< 32) | (get_byte(CONNECTION,14) :: BIT(64)<< 40) | (get_byte(CONNECTION,15) :: BIT(64)<< 48) | (get_byte(CONNECTION,16) :: BIT(64)<< 56)) :: int8 end) AS end_conn,sbzlx FROM sxgis.V_T_TX_ZWYC_ZSDRQ WHERE data_flag !=3 AND {0} and length(CONNECTION) > 8";
+        //typeid = 316000
+        internal static string PG_Query_ZNYC_DLDRQ = "SELECT oid,dydj,ssdkx,(((0 :: BIT(64)) | get_byte(CONNECTION,1) :: BIT(64)<< 0) | (get_byte(CONNECTION,2) :: BIT(64)<< 8) | (get_byte(CONNECTION,3) :: BIT(64)<< 16) | (get_byte(CONNECTION,4) :: BIT(64)<< 24) | (get_byte(CONNECTION,5) :: BIT(64)<< 32) | (get_byte(CONNECTION,6) :: BIT(64)<< 40) | (get_byte(CONNECTION,7) :: BIT(64)<< 48) | (get_byte(CONNECTION,8) :: BIT(64)<< 56)) :: int8 AS start_conn,(case when length(CONNECTION) < 17 then 0 else (((0 :: BIT(64)) | get_byte(CONNECTION,9) :: BIT(64)<< 0) | (get_byte(CONNECTION,10) :: BIT(64)<< 8) | (get_byte(CONNECTION,11) :: BIT(64)<< 16) | (get_byte(CONNECTION,12) :: BIT(64)<< 24) | (get_byte(CONNECTION,13) :: BIT(64)<< 32) | (get_byte(CONNECTION,14) :: BIT(64)<< 40) | (get_byte(CONNECTION,15) :: BIT(64)<< 48) | (get_byte(CONNECTION,16) :: BIT(64)<< 56)) :: int8 end) AS end_conn,sbzlx FROM sxgis.V_T_TX_ZNYC_DLDRQ WHERE data_flag !=3 AND {0} and length(CONNECTION) > 8";
+        //typeid = 360000
+        internal static string PG_Query_ZNYC_ZNLJX = "SELECT oid,dydj,ssdkx,(((0 :: BIT(64)) | get_byte(CONNECTION,1) :: BIT(64)<< 0) | (get_byte(CONNECTION,2) :: BIT (64)<< 8) | (get_byte(CONNECTION,3) :: BIT (64)<< 16) | (get_byte(CONNECTION,4) :: BIT(64)<< 24) | (get_byte(CONNECTION,5) :: BIT(64)<< 32) | (get_byte(CONNECTION,6) :: BIT (64)<< 40) | (get_byte(CONNECTION,7) :: BIT(64)<< 48) | (get_byte(CONNECTION,8) :: BIT(64)<< 56)) :: int8 AS start_conn,(case when length(CONNECTION) < 17 then 0 else (((0 :: BIT(64)) | get_byte(CONNECTION, 9) :: BIT(64) << 0) | (get_byte(CONNECTION, 10) :: BIT(64) << 8) | (get_byte(CONNECTION, 11) :: BIT(64) << 16) | (get_byte(CONNECTION, 12) :: BIT(64) << 24) | (get_byte(CONNECTION, 13) :: BIT(64) << 32) | (get_byte(CONNECTION, 14) :: BIT(64) << 40) | (get_byte(CONNECTION, 15) :: BIT(64) << 48) | (get_byte(CONNECTION, 16) :: BIT(64) << 56)) :: int8 end) AS end_conn, sbzlx FROM sxgis.V_T_TX_ZNYC_ZNLJX WHERE data_flag !=3 AND {0} and length(CONNECTION) > 8";
+        //typeid = 305000
+        internal static string PG_Query_ZNYC_DLQ = "SELECT oid,dydj,ssdkx,(((0 :: BIT(64)) | get_byte(CONNECTION,1) :: BIT(64)<< 0) | (get_byte(CONNECTION,2) :: BIT (64)<< 8) | (get_byte(CONNECTION,3) :: BIT(64)<< 16) | (get_byte(CONNECTION,4) :: BIT(64)<< 24) | (get_byte(CONNECTION,5) :: BIT(64)<< 32) | (get_byte(CONNECTION,6) :: BIT (64)<< 40) | (get_byte(CONNECTION,7) :: BIT(64)<< 48) | (get_byte(CONNECTION,8) :: BIT(64)<< 56)) :: int8 AS start_conn,(CASE WHEN LENGTH(CONNECTION) > 19 THEN(((0 :: BIT(64)) | get_byte(CONNECTION, 17) :: BIT(64) << 0) | (get_byte(CONNECTION, 18) :: BIT(64) << 8) | (get_byte(CONNECTION, 19) :: BIT(64) << 16) | (get_byte(CONNECTION, 20) :: BIT(64) << 24) | (get_byte(CONNECTION, 21) :: BIT(64) << 32) | (get_byte(CONNECTION, 22) :: BIT(64) << 40) | (get_byte(CONNECTION, 23) :: BIT(64) << 48) | (get_byte(CONNECTION, 24) :: BIT(64) << 56)) :: int8 when length(CONNECTION) < 17 then 0 ELSE(((0 :: BIT(64)) | get_byte(CONNECTION, 9) :: BIT(64) << 0) | (get_byte(CONNECTION, 10) :: BIT(64) << 8) | (get_byte(CONNECTION, 11) :: BIT(64) << 16) | (get_byte(CONNECTION, 12) :: BIT(64) << 24) | (get_byte(CONNECTION, 13) :: BIT(64) << 32) | (get_byte(CONNECTION, 14) :: BIT(64) << 40) | (get_byte(CONNECTION, 15) :: BIT(64) << 48) | (get_byte(CONNECTION, 16) :: BIT(64) << 56)) :: int8 END) AS end_conn,sbzlx,ssdz,ckzt,7 as devicetype FROM sxgis.V_T_TX_ZNYC_DLQ WHERE data_flag !=3 AND {0}";
+        //typeid = 307000
+        internal static string PG_Query_ZNYC_FHKG = "SELECT oid,dydj,ssdkx,(((0 :: BIT(64)) | get_byte(CONNECTION,1) :: BIT(64)<< 0) | (get_byte(CONNECTION,2) :: BIT (64)<< 8) | (get_byte(CONNECTION,3) :: BIT(64)<< 16) | (get_byte(CONNECTION,4) :: BIT(64)<< 24) | (get_byte(CONNECTION,5) :: BIT(64)<< 32) | (get_byte(CONNECTION,6) :: BIT (64)<< 40) | (get_byte(CONNECTION,7) :: BIT(64)<< 48) | (get_byte(CONNECTION,8) :: BIT(64)<< 56)) :: int8 AS start_conn,(CASE WHEN LENGTH(CONNECTION) > 19 THEN(((0 :: BIT(64)) | get_byte(CONNECTION, 17) :: BIT(64) << 0) | (get_byte(CONNECTION, 18) :: BIT(64) << 8) | (get_byte(CONNECTION, 19) :: BIT(64) << 16) | (get_byte(CONNECTION, 20) :: BIT(64) << 24) | (get_byte(CONNECTION, 21) :: BIT(64) << 32) | (get_byte(CONNECTION, 22) :: BIT(64) << 40) | (get_byte(CONNECTION, 23) :: BIT(64) << 48) | (get_byte(CONNECTION, 24) :: BIT(64) << 56)) :: int8 when length(CONNECTION) < 17 then 0 ELSE(((0 :: BIT(64)) | get_byte(CONNECTION, 9) :: BIT(64) << 0) | (get_byte(CONNECTION, 10) :: BIT(64) << 8) | (get_byte(CONNECTION, 11) :: BIT(64) << 16) | (get_byte(CONNECTION, 12) :: BIT(64) << 24) | (get_byte(CONNECTION, 13) :: BIT(64) << 32) | (get_byte(CONNECTION, 14) :: BIT(64) << 40) | (get_byte(CONNECTION, 15) :: BIT(64) << 48) | (get_byte(CONNECTION, 16) :: BIT(64) << 56)) :: int8 END) AS end_conn,sbzlx,ssdz,ckzt,7 as devicetype FROM sxgis.V_T_TX_ZNYC_FHKG WHERE data_flag !=3 AND {0}";
+        //typeid = 306000
+        internal static string PG_Query_ZNYC_ZNGLKG_1 = "SELECT oid,dydj,ssdkx,(((0 :: BIT(64)) | get_byte(CONNECTION,1) :: BIT(64)<< 0) | (get_byte(CONNECTION,2) :: BIT (64)<< 8) | (get_byte(CONNECTION,3) :: BIT(64)<< 16) | (get_byte(CONNECTION,4) :: BIT(64)<< 24) | (get_byte(CONNECTION,5) :: BIT(64)<< 32) | (get_byte(CONNECTION,6) :: BIT(64)<< 40) | (get_byte(CONNECTION,7) :: BIT(64)<< 48) | (get_byte(CONNECTION,8) :: BIT(64)<< 56)) :: int8 AS start_conn,(((0 :: BIT (64)) | get_byte(CONNECTION,9) :: BIT(64)<< 0) | (get_byte(CONNECTION,10) :: BIT(64)<< 8) | (get_byte(CONNECTION,11) :: BIT(64)<< 16) | (get_byte(CONNECTION,12) :: BIT(64)<< 24) | (get_byte(CONNECTION,13) :: BIT(64)<< 32) | (get_byte(CONNECTION,14) :: BIT(64)<< 40) | (get_byte(CONNECTION,15) :: BIT(64)<< 48) | (get_byte(CONNECTION,16) :: BIT(64)<< 56)):: int8 AS end_conn,sbzlx FROM sxgis.V_T_TX_ZNYC_GLKG WHERE sbzlx <> 30600001 and data_flag !=3 AND {0} and length(CONNECTION) > 9";
+        internal static string PG_Query_ZNYC_ZNGLKG_2 = "SELECT oid,dydj,ssdkx,(((0 :: BIT(64)) | get_byte(CONNECTION,1) :: BIT(64)<< 0) | (get_byte(CONNECTION,2) :: BIT (64)<< 8) | (get_byte(CONNECTION,3) :: BIT(64)<< 16) | (get_byte(CONNECTION,4) :: BIT(64)<< 24) | (get_byte(CONNECTION,5) :: BIT(64)<< 32) | (get_byte(CONNECTION,6) :: BIT(64)<< 40) | (get_byte(CONNECTION,7) :: BIT(64)<< 48) | (get_byte(CONNECTION,8) :: BIT(64)<< 56)) :: int8 AS start_conn,(((0 :: BIT (64)) | get_byte(CONNECTION,17) :: BIT(64)<< 0) | (get_byte(CONNECTION,18) :: BIT(64)<< 8) | (get_byte(CONNECTION,19) :: BIT(64)<< 16) | (get_byte(CONNECTION,20) :: BIT(64)<< 24) | (get_byte(CONNECTION,21) :: BIT(64)<< 32) | (get_byte(CONNECTION,22) :: BIT(64)<< 40) | (get_byte(CONNECTION,23) :: BIT(64)<< 48) | (get_byte(CONNECTION,24) :: BIT(64)<< 56)):: int8 AS end_conn,sbzlx FROM sxgis.V_T_TX_ZNYC_GLKG WHERE sbzlx <> 30600001 and data_flag !=3 AND {0} and length(CONNECTION) > 20";
+        internal static string PG_Query_ZNYC_ZNGLKG_3 = "SELECT oid,dydj,ssdkx,(((0 :: BIT(64)) | get_byte(CONNECTION,1) :: BIT(64)<< 0) | (get_byte(CONNECTION,2) :: BIT (64)<< 8) | (get_byte(CONNECTION,3) :: BIT(64)<< 16) | (get_byte(CONNECTION,4) :: BIT(64)<< 24) | (get_byte(CONNECTION,5) :: BIT(64)<< 32) | (get_byte(CONNECTION,6) :: BIT(64)<< 40) | (get_byte(CONNECTION,7) :: BIT(64)<< 48) | (get_byte(CONNECTION,8) :: BIT(64)<< 56)) :: int8 AS start_conn,(((0 :: BIT (64)) | get_byte(CONNECTION,25) :: BIT(64)<< 0) | (get_byte(CONNECTION,26) :: BIT(64)<< 8) | (get_byte(CONNECTION,27) :: BIT(64)<< 16) | (get_byte(CONNECTION,28) :: BIT(64)<< 24) | (get_byte(CONNECTION,29) :: BIT(64)<< 32) | (get_byte(CONNECTION,30) :: BIT(64)<< 40) | (get_byte(CONNECTION,31) :: BIT(64)<< 48) | (get_byte(CONNECTION,32) :: BIT(64)<< 56)):: int8 AS end_conn,sbzlx FROM sxgis.V_T_TX_ZNYC_GLKG WHERE sbzlx <> 30600001 and data_flag !=3 AND {0} and length(CONNECTION) > 28";
+        //typeid = 309000
+        internal static string PG_Query_ZNYC_RDQ = "SELECT oid,dydj,ssdkx,(((0 :: BIT(64)) | get_byte(CONNECTION,1) :: BIT(64)<< 0) | (get_byte(CONNECTION,2) :: BIT(64)<< 8) | (get_byte(CONNECTION,3) :: BIT(64)<< 16) | (get_byte(CONNECTION,4) :: BIT(64)<< 24) | (get_byte(CONNECTION,5) :: BIT(64)<< 32) | (get_byte(CONNECTION,6) :: BIT(64)<< 40) | (get_byte(CONNECTION,7) :: BIT(64)<< 48) | (get_byte(CONNECTION,8) :: BIT (64)<< 56)) :: int8 AS start_conn,(CASE WHEN LENGTH(CONNECTION) > 19 THEN(((0 :: BIT(64)) | get_byte(CONNECTION, 17) :: BIT(64) << 0) | (get_byte(CONNECTION, 18) :: BIT(64) << 8) | (get_byte(CONNECTION, 19) :: BIT(64) << 16) | (get_byte(CONNECTION, 20) :: BIT(64) << 24) | (get_byte(CONNECTION, 21) :: BIT(64) << 32) | (get_byte(CONNECTION, 22) :: BIT(64) << 40) | (get_byte(CONNECTION, 23) :: BIT(64) << 48) | (get_byte(CONNECTION, 24) :: BIT(64) << 56)) :: int8 when length(CONNECTION) < 17 then 0 ELSE(((0 :: BIT(64)) | get_byte(CONNECTION, 9) :: BIT(64) << 0) | (get_byte(CONNECTION, 10) :: BIT(64) << 8) | (get_byte(CONNECTION, 11) :: BIT(64) << 16) | (get_byte(CONNECTION, 12) :: BIT(64) << 24) | (get_byte(CONNECTION, 13) :: BIT(64) << 32) | (get_byte(CONNECTION, 14) :: BIT(64) << 40) | (get_byte(CONNECTION, 15) :: BIT(64) << 48) | (get_byte(CONNECTION, 16) :: BIT(64) << 56)) :: int8 END) AS end_conn,sbzlx FROM sxgis.V_T_TX_ZNYC_RDQ WHERE data_flag !=3 AND {0} and length(CONNECTION) > 9";
+        //typeid = 322000
+        internal static string PG_Query_ZNYC_ZNDL = "SELECT oid,dydj,ssdkx,(((0 :: BIT(64)) | get_byte(CONNECTION, 1) :: BIT(64) << 0) | (get_byte(CONNECTION, 2) :: BIT(64) << 8) | (get_byte(CONNECTION, 3) :: BIT(64) << 16) | (get_byte(CONNECTION, 4) :: BIT(64) << 24) | (get_byte(CONNECTION, 5) :: BIT(64) << 32) | (get_byte(CONNECTION, 6) :: BIT(64) << 40) | (get_byte(CONNECTION, 7) :: BIT(64) << 48) | (get_byte(CONNECTION, 8) :: BIT(64) << 56)) :: int8 AS start_conn,(CASE WHEN LENGTH(CONNECTION) > 19 THEN(((0 :: BIT(64)) | get_byte(CONNECTION, 17) :: BIT(64) << 0) | (get_byte(CONNECTION, 18) :: BIT(64) << 8) | (get_byte(CONNECTION, 19) :: BIT(64) << 16) | (get_byte(CONNECTION, 20) :: BIT(64) << 24) | (get_byte(CONNECTION, 21) :: BIT(64) << 32) | (get_byte(CONNECTION, 22) :: BIT(64) << 40) | (get_byte(CONNECTION, 23) :: BIT(64) << 48) | (get_byte(CONNECTION, 24) :: BIT(64) << 56)) :: int8 when length(CONNECTION) < 17 then 0 ELSE(((0 :: BIT(64)) | get_byte(CONNECTION, 9) :: BIT(64) << 0) | (get_byte(CONNECTION, 10) :: BIT(64) << 8) | (get_byte(CONNECTION, 11) :: BIT(64) << 16) | (get_byte(CONNECTION, 12) :: BIT(64) << 24) | (get_byte(CONNECTION, 13) :: BIT(64) << 32) | (get_byte(CONNECTION, 14) :: BIT(64) << 40) | (get_byte(CONNECTION, 15) :: BIT(64) << 48) | (get_byte(CONNECTION, 16) :: BIT(64) << 56)) :: int8 END) AS end_conn,sbzlx FROM sxgis.V_T_TX_ZNYC_ZNDL WHERE data_flag !=3 AND {0} and length(CONNECTION) > 9";
+        //typeid = 390000
+        internal static string PG_Query_ZNYC_ZNQTSB = "SELECT oid,dydj,ssdkx,(((0 :: BIT(64)) | get_byte(CONNECTION, 1) :: BIT(64) << 0) | (get_byte(CONNECTION, 2) :: BIT(64) << 8) | (get_byte(CONNECTION, 3) :: BIT(64) << 16) | (get_byte(CONNECTION, 4) :: BIT(64) << 24) | (get_byte(CONNECTION, 5) :: BIT(64) << 32) | (get_byte(CONNECTION, 6) :: BIT(64) << 40) | (get_byte(CONNECTION, 7) :: BIT(64) << 48) | (get_byte(CONNECTION, 8) :: BIT(64) << 56)) :: int8 AS start_conn,(CASE WHEN LENGTH(CONNECTION) > 19 THEN(((0 :: BIT(64)) | get_byte(CONNECTION, 17) :: BIT(64) << 0) | (get_byte(CONNECTION, 18) :: BIT(64) << 8) | (get_byte(CONNECTION, 19) :: BIT(64) << 16) | (get_byte(CONNECTION, 20) :: BIT(64) << 24) | (get_byte(CONNECTION, 21) :: BIT(64) << 32) | (get_byte(CONNECTION, 22) :: BIT(64) << 40) | (get_byte(CONNECTION, 23) :: BIT(64) << 48) | (get_byte(CONNECTION, 24) :: BIT(64) << 56)) :: int8 when length(CONNECTION) < 17 then 0 ELSE(((0 :: BIT(64)) | get_byte(CONNECTION, 9) :: BIT(64) << 0) | (get_byte(CONNECTION, 10) :: BIT(64) << 8) | (get_byte(CONNECTION, 11) :: BIT(64) << 16) | (get_byte(CONNECTION, 12) :: BIT(64) << 24) | (get_byte(CONNECTION, 13) :: BIT(64) << 32) | (get_byte(CONNECTION, 14) :: BIT(64) << 40) | (get_byte(CONNECTION, 15) :: BIT(64) << 48) | (get_byte(CONNECTION, 16) :: BIT(64) << 56)) :: int8 END) AS end_conn, sbzlx FROM sxgis.V_T_TX_ZNYC_ZNQTSB WHERE data_flag !=3 AND {0} and length(CONNECTION) > 9";
+        //typeid = 311000 
+        internal static string PG_Query_ZNYC_MX = "SELECT oid,(((0 :: bit(64)) | get_byte(connection, 1) :: bit(64) << 0) | (get_byte(connection, 2) :: bit(64) << 8) | (get_byte(connection, 3) :: bit(64) << 16) | (get_byte(connection, 4) :: bit(64) << 24) | (get_byte(connection, 5) :: bit(64) << 32) | (get_byte(connection, 6) :: bit(64) << 40) | (get_byte(connection, 7) :: bit(64) << 48) | (get_byte(connection, 8) :: bit(64) << 56)) :: int8 AS start_conn,ssdz,yxbh as mx_mc FROM sxgis.V_T_TX_ZNYC_MX WHERE data_flag !=3 AND {0}";
+        internal static string PG_Query_ZNYC_DZ = "SELECT oid as dz_id,sbzlx,(CASE WHEN sbzlx IN(30000004,32400000,20400000) THEN 4 ELSE 5 END) AS devicetype,(CASE WHEN sbzlx = 30000004 THEN '开关站' WHEN sbzlx = 32400000 THEN '环网单元' WHEN sbzlx = 20400000 THEN '电缆分支箱' WHEN sbzlx = 32300000 THEN '箱变' ELSE '配电室' END) AS TYPE,(CASE WHEN sbzlx = 30000004 THEN '三遥开关站' WHEN sbzlx = 32400000 THEN '三遥环网单元' WHEN sbzlx = 20400000 THEN '电缆分支箱' WHEN sbzlx = 32300000 THEN '箱变' ELSE '配电室' END) AS blackname,sbmc as devicename,sbid FROM sxgis.V_T_TX_ZNYC_DZ WHERE data_flag !=3 AND {0} and sbzlx in (30000004,32400000,20400000,32300000,30000005,30000006,34300000)";
+
+
+        #endregion
+
+
+
+        public static string PG_Insert_LogInfo = "INSERT INTO wjfx.t_log_info (task_id,log_time,log_content)values('{0}','{1}','{2}')";
+        public static string TopoCondition = "&condition=(sbtype = 311000 and fsbzlx in (30000000)) &topoState=3&topoState=3";
+        public static string TopoCondition_New = "&condition=(sbtype = 311000 and fsbzlx in (30000000)) &topoState=3&blockid={0}&schema=ghdw";
+        public static string TopoQueryCondition = "&condition=((sbtype in (311000,305000) and fsbzlx in (30000000)) or (sbtype in (130000,140000))) &topoState=3";
+        public static string TopoQueryCondition_New = "&condition=((sbtype in (311000,305000) and fsbzlx in (30000000)) or (sbtype in (130000,140000))) &topoState=3&blockid={0}&schema=ghdw";
+        public static Dictionary<string, double> dicLoad = new Dictionary<string, double>();
+        public static  Dictionary<long, double> dicDkxLoad = new  Dictionary<long, double> ();
+        public static Dictionary<long, Dictionary<long, double>> dicPdLoad = new Dictionary<long, Dictionary<long, double>>();
+        public static string PG_Update_Check = "UPDATE wjfx.t_tx_zwyc_dkx_check SET llxl_zgfh = A.zg_pd_load FROM(SELECT ssdkx, kzgxl, SUM(pdfh) AS zg_pd_load FROM wjfx.t_tx_zwyc_fd WHERE task_id = @param0 AND kzgxl > 0 GROUP BY ssdkx, kzgxl) A WHERE t_tx_zwyc_dkx_check.task_id = @param0 AND t_tx_zwyc_dkx_check.ssdkx = A.ssdkx AND t_tx_zwyc_dkx_check.llxl = A.kzgxl";
+        public static string PG_Update_dkx = "UPDATE wjfx.t_tx_zwyc_dkx SET bz_shape=A.shape FROM (SELECT oid,sbzlx,ST_startpoint (st_geometryn (shape,1)) AS shape FROM sxgis.v_t_tx_zwyc_dxd WHERE {0} AND st_geometrytype(shape) in ('ST_LineString','ST_MultiLineString')   AND oid IN (SELECT qsd FROM wjfx.t_tx_zwyc_dkx WHERE task_id=@param2 AND qsdlx=10100000) UNION ALL SELECT oid,sbzlx,ST_startpoint (st_geometryn (shape,1)) AS shape FROM sxgis.v_t_tx_zwyc_dld WHERE {0} AND st_geometrytype(shape) in ('ST_LineString','ST_MultiLineString')  AND oid IN (SELECT qsd FROM wjfx.t_tx_zwyc_dkx WHERE task_id=@param2 AND qsdlx=20100000)) A WHERE t_tx_zwyc_dkx.task_id=@param2 AND t_tx_zwyc_dkx.qsd=A.oid AND t_tx_zwyc_dkx.qsdlx=A.sbzlx";
+        public static string PG_Update_ZgLoad = "UPDATE wjfx.t_tx_zwyc_dkx SET llxkzgl=A.llxkzgl FROM (SELECT oid,(CASE WHEN pd_load ISNULL OR pd_load=0 THEN 100 ELSE llxkzyfh/pd_load*100 END) AS llxkzgl FROM wjfx.t_tx_zwyc_dkx WHERE task_id=@param0 AND load_check_info=0) A WHERE t_tx_zwyc_dkx.task_id=@param0 AND t_tx_zwyc_dkx.oid=A.oid";
+        public static string PG_Update_FD = "UPDATE wjfx.t_tx_zwyc_fd SET bz_shape=A.shape FROM (SELECT oid,sbzlx,ST_startpoint (st_geometryn (shape,1)) AS shape FROM sxgis.v_t_tx_zwyc_dxd WHERE {0} AND st_geometrytype(shape) in ('ST_LineString','ST_MultiLineString')   and oid IN (SELECT qsd FROM wjfx.t_tx_zwyc_fd WHERE task_id=@param2 AND qsdlx=10100000) UNION ALL SELECT oid,sbzlx,ST_startpoint (st_geometryn (shape,1)) AS shape FROM sxgis.v_t_tx_zwyc_dld WHERE {0} AND st_geometrytype(shape) in ('ST_LineString','ST_MultiLineString') and oid IN (SELECT qsd FROM wjfx.t_tx_zwyc_fd WHERE task_id=@param2 AND qsdlx=20100000)) A WHERE t_tx_zwyc_fd.task_id=@param2 AND t_tx_zwyc_fd.qsd=A.oid AND t_tx_zwyc_fd.qsdlx=A.sbzlx";
+         
+
+        public static string PG_Query_FeederSsdkx = "select ssdkx,sbid,0 as type from sxgis.v_t_tx_zwyc_xl where sbzlx = 10000001 and data_flag != 3 AND {0} and ssdkx in ({1}) union all select ssdkx,sbid,1 as type from sxgis.v_t_tx_zwyc_xl where sbzlx = 10000001 and  data_flag != 3 AND {0} and ssdkx in ({2})";
+        internal static string Oracle_Query_Dept_code = "select zcdw from PIS_MID.PMS_T_SB_ZWYC_XL where SG_CODE=:param0 and OBJ_ID in ({0}) and zcdw is not null";
+        internal static string Oracle_Query_Feeder_1 = "select OBJ_ID as dwzy_id,(case when ZCXZ = 5 then 0 else 1 end) as xlsx,(case when zcdw = :param0 then :param1 else '' end) as dept_code,XLZCD as XLCD,JKXLCD as JKXCD,DLXLCD as DLXCD,YXZT as USER_STATUS from PIS_MID.PMS_T_SB_ZWYC_XL where SG_CODE=:param2 and OBJ_ID in (select sbid from TOPO_SB_LINE_SBID)";
+        internal static string PG_QueryGridCell = "select {0} as task_id,shape,sbzlx,sbid,area_divide_id from dwzy.t_tx_ghsb_qyxx where sbzlx IN ('860000001','860000002','860000004','860000005') and is_del = '0' and area_divide_id in ({2}) and hash_part in ({1}) and yxdw = @param0";
+        internal static string PG_Query_Grid_zsbyq = "select distinct A.sbid as sbid,B.ssdkx from (select sbid, shape from wjfx.t_tx_ghsb_qyxx where task_id = @param0 and sbzlx = 860000002) A inner join (select oid, shape, ssdkx from sxgis.v_t_tx_zwyc_zsbyq where data_flag != 3 and {0}) B on ST_contains(A.shape, B.shape) and B.ssdkx > 0";
+        internal static string PG_Query_Grid_pdbyq = "select distinct A.sbid as sbid,B.ssdkx from (select sbid, shape from wjfx.t_tx_ghsb_qyxx where task_id = @param0 and sbzlx = 860000002) A inner join (select oid, shape, ssdkx from sxgis.v_t_tx_znyc_pdbyq where data_flag != 3 and {0}) B on ST_contains(A.shape, B.shape) and B.ssdkx > 0";
+
+        //public static string PG_Query_DKX = "with cxxl as (select oid,llxl,n_1_graph,n_1_array,wjt,color,obj_id,sbmc from wjfx.t_tx_zwyc_dkx where task_id=@param0 and oid in (@param1)) select *,1 as type from cxxl union all select A.llx_oid as oid,B.llxl as llxl,B.n_1_graph as n_1_graph,B.n_1_array as n_1_array,B.wjt as wjt,B.color as color,B.obj_id,B.sbmc,0 as type from (select oid,cast(json_array_elements(('[' || llxl || ']')::json) as text)::int8 as llx_oid from cxxl) A,wjfx.t_tx_zwyc_dkx B where B.task_id=@param0 and A.llx_oid = B.oid and A.llx_oid not in (select oid from cxxl)";
+        //public static string PG_QUERY_DKX_ALL = "select oid,llxl,n_1_graph,n_1_array,wjt,color,obj_id,sbmc,1 as type from wjfx.t_tx_zwyc_dkx where task_id=@param0";
+        public static string PG_Query_DKX = "with cxxl as (select oid, llxl, n_1_graph, n_1_array, wjt, color, obj_id, sbmc, dwjg from wjfx.t_tx_zwyc_dkx where task_id = @param0 and oid in (@param1)) select*,1 as type from cxxl union all select A.llx_oid as oid,B.llxl as llxl,B.n_1_graph as n_1_graph,B.n_1_array as n_1_array,B.wjt as wjt,B.color as color,B.obj_id,B.sbmc,B.dwjg,0 as type from(select oid, cast(json_array_elements(('[' || llxl || ']')::json) as text)::int8 as llx_oid from cxxl) A,wjfx.t_tx_zwyc_dkx B where B.task_id=@param0 and A.llx_oid = B.oid and A.llx_oid not in (select oid from cxxl)";
+        public static string PG_QUERY_DKX_ALL = "select oid,llxl,n_1_graph,n_1_array,wjt,color,obj_id,sbmc,dwjg,1 as type from wjfx.t_tx_zwyc_dkx where task_id=@param0";
+
+        public static string PG_Query_PD = "select oid,ssfd,ssfz,ssdkx,obj_id,sbzlx,0 as type from wjfx.t_tx_zwyc_zsbyq where task_id = @param0 and ssdkx in (@param1) union all select oid,ssfd,ssfz,ssdkx,obj_id,sbzlx,1 as type from wjfx.t_tx_znyc_pdbyq where task_id = @param0 and ssdkx in (@param1)";
+        public static string PG_Query_PD_ALL = "select oid,ssfd,ssfz,ssdkx,obj_id,sbzlx,0 as type from wjfx.t_tx_zwyc_zsbyq where task_id = @param0 union all select oid,ssfd,ssfz,ssdkx,obj_id,sbzlx,1 as type from wjfx.t_tx_znyc_pdbyq where task_id = @param0";
+        public static string Oracle_Query_DkxInfo = "select Device_id,ratedmva*1000 as xedl,to_char(max_app_power_time,'YYYY-MM-DD HH24:mi:ss') AS time_max from ieq_pde_line_data_detail where SG_CODE=:param0 and Device_id in (select SBID from TEMP_TOPO_SB_LINE_SBID) and PERIODS=:param1";
+
+        public static string PG_Update_Dkx_Check_All = "UPDATE wjfx.t_tx_zwyc_dkx_check SET llxl_zgfh = abs(A.zg_pd_load) FROM (select A.ssdkx, A.llxl, B.zg_pd_load from (select ssdkx, llxl from wjfx.t_tx_zwyc_dkx_check where task_id = @param0) A left join(SELECT ssdkx, kzgxl, SUM(pdfh) AS zg_pd_load FROM wjfx.t_tx_zwyc_fd WHERE task_id = @param0 AND kzgxl > 0 GROUP BY ssdkx, kzgxl) B on A.ssdkx = B.ssdkx and A.llxl = B.kzgxl) A WHERE t_tx_zwyc_dkx_check.task_id = @param0 AND t_tx_zwyc_dkx_check.ssdkx = A.ssdkx AND t_tx_zwyc_dkx_check.llxl = A.llxl";
+        public static string PG_Update_Dkx_Check = "UPDATE wjfx.t_tx_zwyc_dkx_check SET llxl_zgfh = abs(A.zg_pd_load) FROM (select A.ssdkx, A.llxl, B.zg_pd_load from (select ssdkx, llxl from wjfx.t_tx_zwyc_dkx_check where task_id = @param0 and ssdkx in (@param0)) A left join(SELECT ssdkx, kzgxl, SUM(pdfh) AS zg_pd_load FROM wjfx.t_tx_zwyc_fd WHERE task_id = @param0 and ssdkx in (@param0) AND kzgxl > 0 GROUP BY ssdkx, kzgxl) B on A.ssdkx = B.ssdkx and A.llxl = B.kzgxl) A WHERE t_tx_zwyc_dkx_check.task_id = @param0 AND t_tx_zwyc_dkx_check.ssdkx = A.ssdkx AND t_tx_zwyc_dkx_check.llxl = A.llxl";
+        public static string PG_Update_Dkx_All = "UPDATE wjfx.t_tx_zwyc_dkx SET llxkzgl=(case when A.llxkzgl > 100 then 100 else A.llxkzgl end) FROM (SELECT oid,(CASE WHEN load_check_info = 0 and xl_n1 = 1 then 100 WHEN load_check_info = 0 and (pd_load ISNULL OR pd_load=0) and xl_n1 = 1 THEN 100 WHEN load_check_info = 0 and (pd_load ISNULL OR pd_load=0) and xl_n1 = 0 THEN 0 when load_check_info = 0 then abs(llxkzyfh)/abs(pd_load)*100 ELSE null END) AS llxkzgl FROM wjfx.t_tx_zwyc_dkx WHERE task_id=@param0) A WHERE t_tx_zwyc_dkx.task_id=@param0 AND t_tx_zwyc_dkx.oid=A.oid";
+        public static string PG_Update_Dkx = "UPDATE wjfx.t_tx_zwyc_dkx SET llxkzgl=(case when A.llxkzgl > 100 then 100 else A.llxkzgl end) FROM (SELECT oid,(CASE WHEN load_check_info = 0 and xl_n1 = 1 then 100 WHEN load_check_info = 0 and (pd_load ISNULL OR pd_load=0) and xl_n1 = 1 THEN 100 WHEN load_check_info = 0 and (pd_load ISNULL OR pd_load=0) and xl_n1 = 0 THEN 0 when load_check_info = 0 then abs(llxkzyfh)/abs(pd_load)*100 ELSE null END) AS llxkzgl FROM wjfx.t_tx_zwyc_dkx WHERE task_id=@param0 AND oid in (@param1)) A WHERE t_tx_zwyc_dkx.task_id=@param0 AND t_tx_zwyc_dkx.oid=A.oid";
+
+        public static string PG_CXDKX_1 = "select A.oid as xl_oid,A.cxkg as xl_cxkg,A.cxkglx as typeid,A.sbid,(case when B.ckzt = 0 then 0 else 1 end) as kgzt,qsdz,A.wsbm from (SELECT oid,cxkg,(case when cxkglx < 10000000 then cxkglx * 100 else cxkglx end)/100 as cxkglx,sbid,qsdz,wsbm FROM dwzy.t_tx_zwyc_dkx where (case when cxkglx < 10000000 then cxkglx else cxkglx/100 end) = 305000 and cxkg > 0 and cxkglx > 0) A left join dwzy.T_TX_ZNYC_DLQ B on A.oid = B.oid ORDER BY A.oid limit 50000 offset @param0";
+        public static string PG_CXDKX_2 = "select A.oid as xl_oid,A.cxkg as xl_cxkg,A.cxkglx as typeid,A.sbid,(case when B.ckzt = 0 then 0 else 1 end) as kgzt,qsdz,A.wsbm from (SELECT oid,cxkg,(case when cxkglx < 10000000 then cxkglx * 100 else cxkglx end)/100 as cxkglx,sbid,qsdz,wsbm FROM dwzy.t_tx_zwyc_dkx where (case when cxkglx < 10000000 then cxkglx else cxkglx/100 end) = 306000 and cxkg > 0 and cxkglx > 0) A left join dwzy.T_TX_ZNYC_GLKG B on A.oid = B.oid";
+        public static string PG_CXDKX_3 = "select A.oid as xl_oid,A.cxkg as xl_cxkg,A.cxkglx as typeid,A.sbid,(case when B.ckzt = 0 then 0 else 1 end) as kgzt,qsdz,A.wsbm from (SELECT oid,cxkg,(case when cxkglx < 10000000 then cxkglx * 100 else cxkglx end)/100 as cxkglx,sbid,qsdz,wsbm FROM dwzy.t_tx_zwyc_dkx where (case when cxkglx < 10000000 then cxkglx else cxkglx/100 end) = 307000 and cxkg > 0 and cxkglx > 0) A left join dwzy.T_TX_ZNYC_FHKG B on A.oid = B.oid";
+        public static string PG_CXDKX_4 = "SELECT oid as xl_oid,cxkg as xl_cxkg,(case when cxkglx < 10000000 then cxkglx else cxkglx/100 end) as typeid,sbid,1 as kgzt,qsdz,wsbm FROM dwzy.t_tx_zwyc_dkx where (case when cxkglx < 10000000 then cxkglx else cxkglx/100 end) not in (305000,306000,307000) and cxkg > 0 and cxkglx > 0";
+        public static string PG_CXDKX_CXKG = "select qsdz,array_to_string(array_agg(kgbm),' or ') as topo_cx from (select qsdz, '(sbtype = ' || cxkglx || ' and oid in (' || array_to_string(array_agg(distinct cxkg), ',') || '))' as kgbm from(select cxkg, (case when cxkglx < 10000000 then cxkglx else cxkglx / 100 end) cxkglx, qsdz from dwzy.t_tx_zwyc_dkx where cxkg > 0 and cxkglx > 0 and qsdz > 0) A group by qsdz, cxkglx) A group by qsdz";
+
+        public static string PG_CXDKX_WS_1 = "select A.oid as xl_oid,A.cxkg as xl_cxkg,A.cxkglx as typeid,A.sbid,(case when B.ckzt = 0 then 0 else 1 end) as kgzt,qsdz,A.wsbm from (SELECT oid,cxkg,(case when cxkglx < 10000000 then cxkglx * 100 else cxkglx end)/100 as cxkglx,sbid,qsdz,wsbm FROM dwzy.t_tx_zwyc_dkx where (case when cxkglx < 10000000 then cxkglx else cxkglx/100 end) = 305000 and cxkg > 0 and cxkglx > 0 and wsbm = @param1) A left join dwzy.T_TX_ZNYC_DLQ B on A.oid = B.oid ORDER BY A.oid limit 50000 offset @param0";
+        public static string PG_CXDKX_WS_2 = "select A.oid as xl_oid,A.cxkg as xl_cxkg,A.cxkglx as typeid,A.sbid,(case when B.ckzt = 0 then 0 else 1 end) as kgzt,qsdz,A.wsbm from (SELECT oid,cxkg,(case when cxkglx < 10000000 then cxkglx * 100 else cxkglx end)/100 as cxkglx,sbid,qsdz,wsbm FROM dwzy.t_tx_zwyc_dkx where (case when cxkglx < 10000000 then cxkglx else cxkglx/100 end) = 306000 and cxkg > 0 and cxkglx > 0 and wsbm = @param0) A left join dwzy.T_TX_ZNYC_GLKG B on A.oid = B.oid";
+        public static string PG_CXDKX_WS_3 = "select A.oid as xl_oid,A.cxkg as xl_cxkg,A.cxkglx as typeid,A.sbid,(case when B.ckzt = 0 then 0 else 1 end) as kgzt,qsdz,A.wsbm from (SELECT oid,cxkg,(case when cxkglx < 10000000 then cxkglx * 100 else cxkglx end)/100 as cxkglx,sbid,qsdz,wsbm FROM dwzy.t_tx_zwyc_dkx where (case when cxkglx < 10000000 then cxkglx else cxkglx/100 end) = 307000 and cxkg > 0 and cxkglx > 0 and wsbm = @param0) A left join dwzy.T_TX_ZNYC_FHKG B on A.oid = B.oid";
+        public static string PG_CXDKX_WS_4 = "SELECT oid as xl_oid,cxkg as xl_cxkg,(case when cxkglx < 10000000 then cxkglx else cxkglx/100 end) as typeid,sbid,1 as kgzt,qsdz,wsbm FROM dwzy.t_tx_zwyc_dkx where (case when cxkglx < 10000000 then cxkglx else cxkglx/100 end) not in (305000,306000,307000) and cxkg > 0 and cxkglx > 0 and wsbm = @param0";
+        public static string PG_CXDKX_CXKG_WS = "select qsdz,array_to_string(array_agg(kgbm),' or ') as topo_cx from (select qsdz, '(sbtype = ' || cxkglx || ' and oid in (' || array_to_string(array_agg(distinct cxkg), ',') || '))' as kgbm from (select cxkg, (case when cxkglx < 10000000 then cxkglx else cxkglx / 100 end) cxkglx, qsdz from dwzy.t_tx_zwyc_dkx where cxkg > 0 and cxkglx > 0 and qsdz > 0 and wsbm = @param0) A group by qsdz, cxkglx) A group by qsdz";
+
+        //public string zsdlqSql = "select oid from dwzy.t_tx_zwyc_zsdlq where wsbm = {0} and ckzt = 0";
+        //public string zsfhkgSql = "select oid from dwzy.t_tx_zwyc_zsfhkg where wsbm = {0} and ckzt = 0";
+
+        //zsdlqSql
+        //zsfhkgSql
+        public static string PG_CXZSQDLQ = "select oid,111000 as typeid from dwzy.t_tx_zwyc_zsdlq where ckzt = 0 ORDER BY oid limit 50000 offset @param0";
+        public static string PG_CXZSFHKG = "select oid,112000 as typeid from dwzy.t_tx_zwyc_zsfhkg where ckzt = 0 ORDER BY oid limit 50000 offset @param0";
+        public static string PG_CXZSCHQ = "select oid,114000 as typeid from dwzy.t_tx_zwyc_zschq where ckzt = 0 ORDER BY oid limit 50000 offset @param0";
+        public static string PG_CXZSQDLQ_WS = "select oid,111000 as typeid from dwzy.t_tx_zwyc_zsdlq where wsbm = @param1 and ckzt = 0 ORDER BY oid limit 50000 offset @param0";
+        public static string PG_CXZSFHKG_WS = "select oid,112000 as typeid from dwzy.t_tx_zwyc_zsfhkg where wsbm = @param1 and ckzt = 0 ORDER BY oid limit 50000 offset @param0";
+        public static string PG_CXZSCHQ_WS = "select oid,114000 as typeid from dwzy.t_tx_zwyc_zschq where wsbm = @param1 and ckzt = 0 ORDER BY oid limit 50000 offset @param0";
+
+        public static string PG_CXPkey = "select pg_class.relname,pg_constraint.conname as pk_name from pg_namespace inner join pg_class on pg_namespace.nspname = 'wjfx_glsb' and  pg_namespace.oid =pg_class.relnamespace and pg_class.relname in ('t_tx_znyc_pdbyq','t_tx_zwyc_zsbyq')inner join pg_constraint on pg_constraint.conrelid = pg_class.oid ";
+
+
+        //出图相关sql
+        public static string CT_CX_SJ_GY_DL = "select shape,'DL' as type,0 as rotate,(case when dydj = 33 then '220' when dydj = 34 then '330' else '220' end) as dydj,null as bz,0.5 as linewidth,0 as color,0 as scale,oid from sxgis.v_t_tx_zwyc_dld where data_flag != 3 and {0} and dydj in (33,34)";
+        public static string CT_CX_SJ_GY_JK = "select shape,'JK' as type,0 as rotate,(case when dydj = 33 then '220' when dydj = 34 then '330' else '220' end) as dydj,null as bz,0.5 as linewidth,0 as color,0 as scale,oid from sxgis.v_t_tx_zwyc_dxd where data_flag != 3 and {0} and dydj in (33,34)";
+
+        public static string Query_State = "select * from ghdw.t_task_push_state where dept_code = @param0 and task_id =@param1";
+
+        public static string QueryComplateState = "select * from wjfx.t_task_info where task_id = @param0 order by oid desc";
+        public static string InsertComplateState = "insert into wjfx.t_task_info (task_id,task_start,task_json) values(@param0,0,@param1)";
+        /// <summary>
+        /// {0}当前时间
+        /// {1}状态，开始1，结束2
+        /// {2} task_id
+        /// </summary>
+        internal static string Oracle_UpdateTaskTime= "update PIS.ELE_TOO_SECTION_PART_TASK set TP_ANALYSIS_S_TIME = (select SYSDATE from dual),    TP_ANALYSIS_F_TIME = null,    TP_ANALYSIS_STATUS = '{0}' where task_id = '{1}'";
+
+        public static string PG_QUERY_RUN_TASK_COUNT = "SELECT count(1) FROM wjfx.t_task_info where task_start=1 and task_finish is null";
+        public static string PG_QUERY_NEEDRUN_TASKINFO = "select task_id,task_json from wjfx.t_task_info where task_start=0 and task_json is not null order by oid limit @param0";
+        public static Dictionary<long, Dictionary<long, double>> dicZsLoad;
+    }
+}

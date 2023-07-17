@@ -1,0 +1,244 @@
+﻿using Newtonsoft.Json;
+using System;
+using System.Collections.Generic;
+using System.Data;
+using System.Text;
+
+namespace DBConnector
+{
+    public class TestClass
+    {
+        public static void CompletionTestData(ref DataTable dtFeeder, ref DataTable dtTrans)
+        {
+            Dictionary<string, double> dic = new Dictionary<string, double>();
+            for (int i = 0; i < dtFeeder.Rows.Count; i++)
+            {
+                string guid = Guid.NewGuid().ToString();
+                Random random = new Random();
+                decimal rl = random.Next(5000, 8000);
+                rl = 8000;
+                dtFeeder.Rows[i]["OBJ_ID"] = guid;
+                //if (i > 5)
+                dtFeeder.Rows[i]["TIME_MAX"] = "2023-06-06 12:00:00";
+                dtFeeder.Rows[i]["XEDL"] = rl;
+                dic.Add(guid, 3);
+                //dic.Add(guid, random.Next(0, 5) + random.Next(1, 100) * 0.01);
+            }
+            for (int i = 0; i < dtTrans.Rows.Count; i++)
+            {
+                string guid = Guid.NewGuid().ToString();
+                Random random = new Random();
+                dtTrans.Rows[i]["OBJ_ID"] = guid;
+                // dtTrans.Rows[i]["PDRL"] = 200;
+                //if (i > 30)
+                dic.Add(guid, 100);
+                //dic.Add(guid, random.Next(0, 200) + random.Next(1, 100) * 0.01);
+            }
+            //string path = Environment.CurrentDirectory + "\\TestData\\load.txt";
+
+
+            //if (System.IO.File.Exists(path))
+            //{
+            //    System.IO.File.Delete(path);
+            //}
+            //System.IO.File.Create(path).Dispose();
+            //System.IO.FileStream fs = new System.IO.FileStream(path, System.IO.FileMode.Append, System.IO.FileAccess.Write);
+            //byte[] data = System.Text.Encoding.Default.GetBytes(JsonConvert.SerializeObject(dic));
+            //fs.Write(data, 0, data.Length);
+            //fs.Flush();
+            //fs.Close(); 
+            ConfigClass.dicLoad = dic;
+        }
+        public static void CompletionTestDataNew(ref DataTable dtFeeder, ref DataTable dtTrans)
+        {
+            Dictionary<long, double> dicDkx = new Dictionary<long, double>();
+            Dictionary<long, Dictionary<long, double>> dicPdbyq = new Dictionary<long, Dictionary<long, double>>();
+            Dictionary<long, Dictionary<long, double>> dicZsbyq = new Dictionary<long, Dictionary<long, double>>();
+            try
+            {
+                Dictionary<long, double> dicpd = new Dictionary<long, double>();
+                Dictionary<long, double> diczs = new Dictionary<long, double>();
+                long oid = 0;
+                for (int i = 0; i < dtFeeder.Rows.Count; i++)
+                {
+                    oid = Convert.ToInt64(dtFeeder.Rows[i]["xl_oid"]);
+                    Random random = new Random();
+                    decimal rl = random.Next(5000, 8000);
+                    rl = 8000;
+                    dtFeeder.Rows[i]["XEDL"] = rl;
+                    if (!dicDkx.ContainsKey(oid)) dicDkx.Add(oid, 3);
+                    //dicDkx.Add(oid, random.Next(0, 5) + random.Next(1, 100) * 0.01);
+                }
+
+                long xl_oid = 0;
+                string typeid = "";
+                int numspd = 0;
+                int numszs = 0;
+                bool b = false;
+                if (dtTrans.Columns.Contains("xl_oid"))
+                {
+                    b = true;
+                }
+                foreach (DataRow item in dtFeeder.Rows)
+                { 
+                    xl_oid = Convert.ToInt64(item["xl_oid"]); 
+                    DataRow[] drs =b? dtTrans.Select("xl_oid=" + xl_oid): dtTrans.Select("ssdkx=" + xl_oid);
+                    foreach (DataRow row in drs)
+                    {
+                        Random random = new Random();
+                        oid = Convert.ToInt64(row["oid"]);
+                        typeid = row["sbzlx"].ToString().Substring(0, 6);
+                        if (typeid == "302000")
+                        {
+                            if (!dicpd.ContainsKey(oid))
+                            {
+                                numspd++;
+                                dicpd.Add(oid, 100); //dicpd.Add(oid, random.Next(0, 200) + random.Next(1, 100) * 0.01);
+                            }
+                            else
+                            {
+
+                            }
+                        }
+                        else if (typeid == "110000")
+                        {
+                            if (!diczs.ContainsKey(oid))
+                            {
+                                numszs++;
+                                diczs.Add(oid, 100);//diczs.Add(oid, random.Next(0, 200) + random.Next(1, 100) * 0.01);
+                            }
+                            else
+                            {
+
+                            }
+                        }
+                    }
+                    if (!dicZsbyq.ContainsKey(xl_oid))
+                    {
+                        dicZsbyq.Add(xl_oid, diczs);
+                        diczs = new Dictionary<long, double>();
+                    }
+                    if (!dicPdbyq.ContainsKey(xl_oid))
+                    {
+                        dicPdbyq.Add(xl_oid, dicpd);
+                        dicpd = new Dictionary<long, double>();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+            }
+            ConfigClass.dicDkxLoad = dicDkx;
+            ConfigClass.dicPdLoad = dicPdbyq;
+            ConfigClass.dicZsLoad = dicZsbyq;
+        }
+
+        internal static void SaveToText(Dictionary<int, DataTable> topodata, string parameter, string dwxh, string dept_code, string sg_code, Dictionary<long, List<long>> listTL)
+        {
+            string name = "topodata_";
+            int count = 1;
+            foreach (var item in topodata.Keys)
+            {
+                DataTable dt = topodata[item];
+                WriteToText(name + count, dt);
+                count++;
+            }
+            ParaInfo info = new ParaInfo();
+            info.parameter = parameter;
+            info.dwxh = dwxh;
+            info.sg_code = sg_code;
+            info.dept_code = dept_code;
+            WriteToText("para", info);
+            WriteToText("tonglu", listTL);
+        }
+        public static void WriteToText(string name, object value)
+        {
+            string path = Environment.CurrentDirectory + "\\TestData\\" + name + ".txt";
+            if (System.IO.File.Exists(path))
+            {
+                System.IO.File.Delete(path);
+            }
+            System.IO.File.Create(path).Dispose();
+            System.IO.FileStream fs = new System.IO.FileStream(path, System.IO.FileMode.Append, System.IO.FileAccess.Write);
+            byte[] data = System.Text.Encoding.Default.GetBytes(JsonConvert.SerializeObject(value));
+            fs.Write(data, 0, data.Length);
+            fs.Flush();
+            fs.Close();
+        }
+        public struct ParaInfo
+        {
+            public string parameter;
+            public string dwxh;
+            public string dept_code;
+            public string sg_code;
+        }
+        public static string parameter;
+        public static string sg_code;
+        public static string dept_code;
+        public static string dwxh;
+        public static Dictionary<long, List<long>> listTL = new Dictionary<long, List<long>>();
+        public static Dictionary<int, System.Data.DataTable> GetData()
+        {
+            Dictionary<int, System.Data.DataTable> dic = new Dictionary<int, DataTable>();
+            try
+            {
+                #region 获取参数
+                string path = Environment.CurrentDirectory + "\\TestData\\";
+                string str = System.IO.File.ReadAllText(path + "para.txt");
+                Dictionary<string, object> data = null;
+                data = JsonConvert.DeserializeObject<Dictionary<string, object>>(str);
+                parameter = data["parameter"].ToString();
+                dept_code = data["dept_code"].ToString();
+                sg_code = data["sg_code"].ToString();
+                dwxh = data["dwxh"].ToString();
+                #endregion 
+                #region 获取通路
+                str = System.IO.File.ReadAllText(path + "tonglu.txt");
+                listTL = JsonConvert.DeserializeObject<Dictionary<long, List<long>>>(str);
+                #endregion
+                str = System.IO.File.ReadAllText(path + "topodata_1.txt");
+                dic.Add(1, JsonConvert.DeserializeObject<DataTable>(str));
+
+                str = System.IO.File.ReadAllText(path + "topodata_2.txt");
+                dic.Add(2, JsonConvert.DeserializeObject<DataTable>(str));
+
+                str = System.IO.File.ReadAllText(path + "topodata_3.txt");
+                dic.Add(3, JsonConvert.DeserializeObject<DataTable>(str));
+
+                str = System.IO.File.ReadAllText(path + "topodata_4.txt");
+                dic.Add(4, JsonConvert.DeserializeObject<DataTable>(str));
+
+                str = System.IO.File.ReadAllText(path + "topodata_5.txt");
+                dic.Add(5, JsonConvert.DeserializeObject<DataTable>(str));
+
+                str = System.IO.File.ReadAllText(path + "topodata_6.txt");
+                dic.Add(6, JsonConvert.DeserializeObject<DataTable>(str));
+
+                str = System.IO.File.ReadAllText(path + "topodata_7.txt");
+                dic.Add(7, JsonConvert.DeserializeObject<DataTable>(str));
+
+                str = System.IO.File.ReadAllText(path + "topodata_8.txt");
+                dic.Add(8, JsonConvert.DeserializeObject<DataTable>(str));
+
+                str = System.IO.File.ReadAllText(path + "topodata_9.txt");
+                dic.Add(9, JsonConvert.DeserializeObject<DataTable>(str));
+
+                str = System.IO.File.ReadAllText(path + "topodata_10.txt");
+                dic.Add(10, JsonConvert.DeserializeObject<DataTable>(str));
+
+                str = System.IO.File.ReadAllText(path + "topodata_11.txt");
+                dic.Add(11, JsonConvert.DeserializeObject<DataTable>(str));
+
+                str = System.IO.File.ReadAllText(path + "topodata_12.txt");
+                dic.Add(12, JsonConvert.DeserializeObject<DataTable>(str));
+
+
+            }
+            catch (Exception ex)
+            {
+                throw new Exception(ex.Message);
+            }
+            return dic;
+        }
+    }
+}

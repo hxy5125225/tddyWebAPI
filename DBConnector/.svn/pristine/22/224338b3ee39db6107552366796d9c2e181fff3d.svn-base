@@ -1,0 +1,16 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+
+namespace DBConnector
+{
+    [System.Security.SecuritySafeCritical]
+    public class DelayInfo
+    {
+        public string deviceName;//名称
+        public int year;//现状年
+        public int targetYear;//目标年
+        public string deviceType;//设备类型
+    }
+}

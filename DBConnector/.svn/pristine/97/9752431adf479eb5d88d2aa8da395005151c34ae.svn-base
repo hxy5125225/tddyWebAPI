@@ -1,0 +1,34 @@
+﻿using Oracle.ManagedDataAccess.Client;
+using System;
+using System.Collections.Generic;
+using System.Data;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace DBConnector.Oracle
+{
+    public class OracleClass
+    {
+       
+        public static DataTable QueryOracleDatabase()
+        {
+            DataTable dt = new DataTable();
+            string ServerConnStr = "Data Source=(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=47.95.255.108)(PORT=1521))(CONNECT_DATA=(SERVICE_NAME=orcl)));Persist Security Info=True;User ID=qhdw;Password=123456;";
+
+            using (OracleConnection cn = new OracleConnection(ServerConnStr))
+            {
+                cn.Open();
+                string sql = "select '三遥' as NAME,'101f2ee7e18a1d30225b9f0118015c101e5fc64139' as sbid from dual ";
+                OracleCommand cmd = new OracleCommand(sql, cn);
+                OracleDataAdapter adapter = new OracleDataAdapter(cmd);
+                DataSet daset = new DataSet();
+                adapter.Fill(daset);
+                dt = daset.Tables[0];
+                cmd.Parameters.Clear();
+                cmd.Dispose();
+            }
+            return dt;
+        }
+    }
+}

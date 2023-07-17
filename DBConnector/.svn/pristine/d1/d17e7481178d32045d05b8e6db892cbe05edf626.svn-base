@@ -1,0 +1,300 @@
+﻿using System;
+using System.Data;
+using Npgsql;
+
+/// <summary>
+/// PDatabase 的摘要说明
+/// </summary>
+namespace DBConnector
+{
+    [System.Security.SecuritySafeCritical]
+    public class PGDatabase
+    {
+
+        public static NpgsqlConnection connection = null;
+
+        public string connectionString="server={0};uid={1};pwd={2};database=HYGL";
+        /// <summary>
+        /// 返回一个数据库连接
+        /// </summary>
+        /// <returns></returns>
+        private static NpgsqlConnection InitSqlConnection(string connectionString, string DatabaseName, int context)
+        {
+
+            connection = new NpgsqlConnection(connectionString);
+            if (connection.State.Equals(ConnectionState.Closed))
+            {
+                connection.Open();
+            }
+            return connection;
+        }
+
+        
+
+        /// <summary>
+        /// 重载函数CreateCmd()
+        /// </summary>
+        /// <param name="procName">存储过程名</param>
+        /// <returns>SqlCommand</returns>
+        private static NpgsqlCommand CreateCmd(string connectionString, string DatabaseName, int context,string  sql )
+        {
+            NpgsqlConnection Sqlconn = InitSqlConnection(connectionString, DatabaseName, context);
+            NpgsqlCommand Cmd = new NpgsqlCommand();
+            Cmd.Connection = Sqlconn;
+            Cmd.CommandText = sql;
+            return Cmd;
+        }
+
+        /// <summary>
+        /// 返回连接对象方法重载函数
+        /// </summary>
+        /// <param name="Sqlstr"></param>
+        /// <param name="prams"></param>
+        /// <returns></returns>
+        private static NpgsqlCommand CreateCmd(string connectionString, string DatabaseName, int context, NpgsqlParameter[] prams, string sql)
+        {
+            NpgsqlConnection Sqlconn = InitSqlConnection(connectionString, DatabaseName, context);
+            NpgsqlCommand Cmd = new NpgsqlCommand();
+            Cmd.Connection = Sqlconn;
+            Cmd.CommandText = sql;
+            if (prams != null)
+            {
+                foreach (NpgsqlParameter parameter in prams)
+                {
+                    if (parameter != null)
+                    {
+                        Cmd.Parameters.Add(parameter);
+                    }
+                }
+            }
+            return Cmd;
+        }
+
+        /// <summary>
+        /// 传入函数名，构造一个执行函数Command对象
+        /// </summary>
+        /// <param name="ProcName"></param>
+        /// <returns></returns>
+        private static NpgsqlCommand CreateProcCmd(string connectionString, string DatabaseName, int context,string ProcName)
+        {
+            NpgsqlConnection Sqlconn = InitSqlConnection(connectionString, DatabaseName, context);
+            NpgsqlCommand Cmd = new NpgsqlCommand();
+            Cmd.Connection = Sqlconn;
+            Cmd.CommandType = CommandType.StoredProcedure;
+            Cmd.CommandText = ProcName;
+            return Cmd;
+        }
+
+        /// <summary>
+        /// 创建一个sqlCommand对象，并且接受参数传入
+        /// </summary>
+        /// <param name="ProcName"></param>
+        /// <param name="prams"></param>
+        /// <returns></returns>
+        private static NpgsqlCommand CreateProcCmd(string connectionString, string DatabaseName, int context, string ProcName, NpgsqlParameter[] prams)
+        {
+            NpgsqlConnection Sqlconn = InitSqlConnection(connectionString, DatabaseName, context);
+            NpgsqlCommand Cmd = new NpgsqlCommand();
+            Cmd.Connection = Sqlconn;
+            Cmd.CommandType = CommandType.StoredProcedure;
+            Cmd.CommandText = ProcName;
+            if (prams != null)
+            {
+                foreach (NpgsqlParameter parameter in prams)
+                {
+                    if (parameter != null)
+                    {
+                        Cmd.Parameters.Add(parameter);
+                    }
+                }
+            }
+            return Cmd;
+        }
+
+        /// <summary>
+        /// 执行传入的语句，获取一个DataSet
+        /// </summary>
+        /// <param name="Sqlstr"></param>
+        /// <returns></returns>
+        public static DataSet RunSqlGetDataSet(string connectionString, string DatabaseName, int context,string sql)
+        {
+            NpgsqlConnection Sqlconn = InitSqlConnection(connectionString, DatabaseName, context);
+            NpgsqlDataAdapter Dtr = new NpgsqlDataAdapter(sql, Sqlconn);
+            DataSet Ds = new DataSet();
+            Dtr.Fill(Ds, "mytable");
+            Sqlconn.Close();
+            return Ds;
+        }
+
+        /// <summary>
+        /// 方法重载，接受传入带参数的语句，获取一个DataSet值
+        /// </summary>
+        /// <param name="Sqlstr"></param>
+        /// <param name="prams"></param>
+        /// <returns></returns>
+        public static DataSet RunSqlGetDataSet(string connectionString, string DatabaseName, int context, NpgsqlParameter[] prams, string sql)
+        {
+            NpgsqlConnection Sqlconn = InitSqlConnection(connectionString, DatabaseName, context);
+            NpgsqlDataAdapter Dtr = new NpgsqlDataAdapter(sql, Sqlconn);
+            if (prams != null)
+            {
+                foreach (NpgsqlParameter parameter in prams)
+                {
+                    Dtr.SelectCommand.Parameters.Add(parameter);
+                }
+            }
+            DataSet Ds = new DataSet();
+            Dtr.Fill(Ds, "mytable");
+            Sqlconn.Close();
+            return Ds;
+        }
+
+       
+
+        /// <summary>
+        /// 执行一次数据库表查询操作，返回所影响的条数（用户添加、修改、删除）
+        /// </summary>
+        /// <param name="Sqlstr"></param>
+        /// <returns></returns>
+        public static int ExecuteTddyNonQuery(string connectionString, string DatabaseName, int context, string sql)
+        {
+            NpgsqlCommand Cmd = CreateCmd(connectionString, DatabaseName, context, sql);
+            int intResult = Cmd.ExecuteNonQuery();
+            return intResult;
+        }
+        public static DataTable ExecuteDataTable(string connectionString, string DatabaseName, int context, NpgsqlParameter[] parms, string sql)
+        {
+            return RunSqlGetDataSet(connectionString, DatabaseName, context, parms, sql).Tables[0];
+        }
+        /// <summary>
+        /// 执行带参数的sql语句，返回执行时所影响的条数
+        /// </summary>
+        /// <param name="Sqlstr"></param>
+        /// <param name="prams"></param>
+        /// <returns></returns>
+        public static int ExecuteTddyNonQuery(string connectionString, string DatabaseName, int context, NpgsqlParameter[] prams,string sql)
+        {
+            NpgsqlCommand Cmd = CreateCmd(connectionString, DatabaseName, context, prams,sql);
+            int intResult = Cmd.ExecuteNonQuery();
+            return intResult;
+        }
+
+        /// <summary>
+        /// 执行一次数据库表查询操作，返回第一行第一列
+        /// </summary>
+        /// <param name="Sqlstr"></param>
+        /// <returns></returns>
+        public static object RunExecuteScalar(string connectionString, string DatabaseName, int context, string sql)
+        {
+            NpgsqlCommand Cmd = CreateCmd(connectionString, DatabaseName, context, sql);
+            object obResult = Cmd.ExecuteScalar();
+            return obResult;
+        }
+
+        /// <summary>
+        /// 执行一次带参数的数据库表查询操作，返回第一行第一列，传入SQL语句
+        /// </summary>
+        /// <param name="Sqlstr"></param>
+        /// <param name="prams"></param>
+        /// <returns></returns>
+        public static object RunExecuteScalar(string connectionString, string DatabaseName, int context, NpgsqlParameter[] prams, string sql)
+        {
+            NpgsqlCommand Cmd = CreateCmd(connectionString, DatabaseName, context, prams, sql);
+            object obResult = Cmd.ExecuteScalar();
+            return obResult;
+        }
+
+
+       
+
+        /// <summary>
+        /// 执行存储过程，返回一个DataSet值
+        /// </summary>
+        /// <param name="ProcName"></param>
+        /// <returns></returns>
+        public static DataSet RunProcGetDataSet(string connectionString, string DatabaseName, int context,string ProcName)
+        {
+            NpgsqlConnection Sqlconn = InitSqlConnection(connectionString, DatabaseName, context);
+            NpgsqlDataAdapter Dtr = new NpgsqlDataAdapter(ProcName, Sqlconn );
+            Dtr.SelectCommand.CommandType = CommandType.StoredProcedure;
+            DataSet Ds = new DataSet();
+            Dtr.Fill(Ds);
+            Sqlconn.Close();
+            return Ds;
+        }
+
+        /// <summary>
+        /// 方法重载，执行带参数的存储过程，返回DataSet值
+        /// </summary>
+        /// <param name="ProcName"></param>
+        /// <param name="prams"></param>
+        /// <returns></returns>
+        public static DataSet RunProcGetDataSet(string connectionString, string DatabaseName, int context,string ProcName, NpgsqlParameter[] prams)
+        {
+            NpgsqlConnection Sqlconn = InitSqlConnection(connectionString, DatabaseName, context);
+            NpgsqlDataAdapter Dtr = new NpgsqlDataAdapter(ProcName, Sqlconn );
+            Dtr.SelectCommand.CommandType = CommandType.StoredProcedure;
+            if (prams != null)
+            {
+                foreach (NpgsqlParameter parameter in prams)
+                {
+                    Dtr.SelectCommand.Parameters.Add(parameter);
+                }
+            }
+            DataSet Ds = new DataSet();
+            Dtr.Fill(Ds);
+            Sqlconn.Close();
+            return Ds;
+        }
+
+        /// <summary>
+        /// 执行存储过程，返回操作影响条数
+        /// </summary>
+        /// <param name="ProcName"></param>
+        /// <returns></returns>
+        public static int RunProcExecute(string connectionString, string DatabaseName, int context,string ProcName)
+        {
+            NpgsqlCommand Cmd = CreateProcCmd(connectionString, DatabaseName, context,ProcName);
+            int intResult = Convert.ToInt32(Cmd.ExecuteScalar());
+            return intResult;
+        }
+
+        /// <summary>
+        /// 执行带参数的存储过程，返回操作影响条数
+        /// </summary>
+        /// <param name="ProcName"></param>
+        /// <param name="prams"></param>
+        /// <returns></returns>
+        public static int RunProcExecute(string connectionString, string DatabaseName, int context,string ProcName, NpgsqlParameter[] prams)
+        {
+            NpgsqlCommand Cmd = CreateProcCmd(connectionString, DatabaseName, context, ProcName, prams);
+            int intResult = Convert.ToInt32(Cmd.ExecuteScalar());
+            return intResult;
+        }
+
+        /// <summary>
+        /// 执行存储过程，返回第一行第一列的值
+        /// </summary>
+        /// <param name="ProcName"></param>
+        /// <returns></returns>
+        public static object RunProcExecuteScalar(string connectionString, string DatabaseName, int context,string ProcName)
+        {
+            NpgsqlCommand Cmd = CreateProcCmd(connectionString, DatabaseName, context, ProcName);
+            object obResult = Cmd.ExecuteScalar();
+            return obResult;
+        }
+
+        /// <summary>
+        /// 执行带参数的存储过程，返回第一行第一列的值
+        /// </summary>
+        /// <param name="ProcName"></param>
+        /// <param name="prams"></param>
+        /// <returns></returns>
+        public static object RunProcExecuteScalar(string connectionString, string DatabaseName, int context,string ProcName, NpgsqlParameter[] prams)
+        {
+            NpgsqlCommand Cmd = CreateProcCmd(connectionString, DatabaseName, context, ProcName, prams);
+            object obResult = Cmd.ExecuteScalar();
+            return obResult;
+        }
+    }
+}

@@ -1,0 +1,24 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace DBConnector
+{
+    public class WhereInEntity
+    {
+        /// <summary>
+        /// in里面的占位符
+        /// </summary>
+        public string whereInSql { get; set; }
+        /// <summary>
+        /// 占位符对应的值
+        /// </summary>
+        public List<object> parameterList { get; set; }
+        /// <summary>
+        /// 当前sql一共有多少占位符
+        /// </summary>
+        public int currentCount { get; set; }
+    }
+}

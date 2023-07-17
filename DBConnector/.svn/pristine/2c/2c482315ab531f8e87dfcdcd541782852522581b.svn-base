@@ -1,0 +1,387 @@
+﻿using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Data;
+using System.Globalization;
+using System.Linq;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks; 
+
+namespace DBConnector
+{
+    public class DataTableClass
+    {
+        /// <summary>
+        /// 合并表格
+        /// </summary>
+        /// <param name="dt1"></param>
+        /// <param name="dt2"></param>
+        /// <returns></returns>
+        public static System.Data.DataTable JoinTable(DataTable dt1, System.Data.DataTable dt2,string field1,string field2)
+        {
+            System.Data.DataTable dt = new DataTable();
+            GetColumns(dt1.Columns, ref dt);
+            GetColumns(dt2.Columns, ref dt);
+            try
+            {
+                var query = from tab1 in dt1.AsEnumerable()
+                            join rowRight in dt2.AsEnumerable() on tab1[field1] equals rowRight[field2] into gj
+                            from tab2 in gj.DefaultIfEmpty()
+                            select tab1.ItemArray.Concat((tab2 == null) ? (dt2.NewRow().ItemArray) : tab2.ItemArray).ToArray();
+                foreach (object[] values in query)
+                {
+                    dt.Rows.Add(values);
+                }
+                dt.Columns.Remove(field2);
+            }
+            catch (Exception ex)
+            {
+
+                throw new Exception(ex.StackTrace);
+            }
+            return dt;
+        }
+        public static System.Data.DataTable JoinTable(DataTable dt1, System.Data.DataTable dt2, List<string> field1, List<string> field2)
+        {
+            System.Data.DataTable dt = new DataTable();
+            GetColumns(dt1.Columns, ref dt);
+            GetColumns(dt2.Columns, ref dt);
+            try
+            {
+                var query = from tab1 in dt1.AsEnumerable()
+                            join rowRight in dt2.AsEnumerable() on new { A = tab1.Field<long>(field1[0]), B = tab1.Field<long>(field1[1]) } equals new { A = rowRight.Field<long>(field2[0]), B = rowRight.Field<long>(field2[1]) }
+                 into gj
+                            from tab2 in gj.DefaultIfEmpty()
+                            select tab1.ItemArray.Concat((tab2 == null) ? (dt2.NewRow().ItemArray) : tab2.ItemArray).ToArray();
+                //var query = from tab1 in dt1.AsEnumerable()
+                //            join rowRight in dt2.AsEnumerable() on getObj1(tab1, field1) equals getObj1(rowRight, field2) into gj
+                //            from tab2 in gj.DefaultIfEmpty()
+                //            select tab1.ItemArray.Concat((tab2 == null) ? (dt2.NewRow().ItemArray) : tab2.ItemArray).ToArray();
+                foreach (object[] values in query)
+                {
+                    dt.Rows.Add(values);
+                }
+                for (int i = 0; i < field2.Count; i++)
+                {
+                    dt.Columns.Remove(field2[i]);
+                } 
+            }
+            catch (Exception ex)
+            {
+
+                
+                
+                
+                
+                
+                
+                
+                
+                throw new Exception(ex.StackTrace);
+            }
+            return dt;
+        }
+        public static object[] getObj(DataRow dr,List<string> list)
+        {
+            object[] obj = new object[list.Count];
+            for (int i = 0; i < list.Count; i++)
+            {
+                obj[i] = dr[ list[i]];
+            }
+            return obj;
+        }
+        public static dynamic getObj1(DataRow dr, Dictionary<string,Type> dic)
+        {
+            List<string> list = new List<string>() {"A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z" };
+            Dictionary<object, object> dics = new Dictionary<object, object>();
+            int count = 0;
+            foreach (var item in dic)
+            {
+                dics.Add(list[count],dr[item.Key]);
+                count++;
+            }
+            string json=Newtonsoft.Json.JsonConvert.SerializeObject(dics);
+            dynamic dy = Newtonsoft.Json.JsonConvert.DeserializeObject(json);
+            return dy;
+        }
+        public static System.Data.DataTable JoinTable_Sub(DataTable dt1, System.Data.DataTable dt2)
+        {
+            System.Data.DataTable dtNew = new DataTable();
+            dtNew.Columns.Add("oid", typeof(long));
+            dtNew.Columns.Add("id", typeof(string));
+            dtNew.Columns.Add("sbmc", typeof(string));
+            dtNew.Columns.Add("sbsx", typeof(string));
+            dtNew.Columns.Add("sblx", typeof(string));
+            dtNew.Columns.Add("dydj", typeof(string));
+            dtNew.Columns.Add("zbts", typeof(int));
+            dtNew.Columns.Add("rlgc", typeof(string));
+            dtNew.Columns.Add("zbrl", typeof(decimal));
+            dtNew.Columns.Add("dm_id", typeof(long));
+            try
+            {
+                var query = from tab1 in dt1.AsEnumerable()
+                            join rowRight in dt2.AsEnumerable() on tab1["bdz_sbid"] equals rowRight["DWZY_ID"] into gj
+                            from tab2 in gj.DefaultIfEmpty()
+                            select new
+                            {
+                                oid = tab1.Field<long>("bdz_id"),
+                                id = tab1.Field<string>("bdz_sbid"),
+                                sbmc = tab1.Field<string>("bdz_mc"),
+                                dm_id = tab1.Field<long>("bdz_id"),
+                                sbsx = tab2 == null ? "" : tab2.Field<string>("SBSX"),
+                                sblx = tab2 == null ? "" : tab2.Field<string>("SBLX"),
+                                dydj = tab2 == null ? "" : tab2.Field<string>("DYDJ"),
+                                zbts = tab2 == null ? 0 : tab2.Field<int>("ZBTS"),
+                                rlgc = tab2 == null ? "" : tab2.Field<string>("RLGC"),
+                                zbrl = tab2 == null ? 0 : tab2.Field<decimal>("ZBRL")
+                            };
+
+                foreach (var obj in query)
+                {
+                    dtNew.Rows.Add(obj.oid, obj.id, obj.sbmc, obj.sbsx, obj.sblx, obj.dydj, obj.zbts, obj.rlgc, obj.zbrl, obj.dm_id);
+                }
+            }
+            catch (Exception ex)
+            {
+
+                throw new Exception(ex.StackTrace);
+            }
+            return dtNew;
+        }
+        public static System.Data.DataTable JoinTable_Feeder(DataTable dt1, System.Data.DataTable dt2, DataTable dt3)
+        {
+            System.Data.DataTable dtNew = new DataTable();
+            dtNew.Columns.Add("oid", typeof(long));
+            dtNew.Columns.Add("id", typeof(string));
+            dtNew.Columns.Add("sbmc", typeof(string));
+            dtNew.Columns.Add("ssbdz", typeof(string));
+            dtNew.Columns.Add("mxh", typeof(string));
+            dtNew.Columns.Add("cxkgid", typeof(long));
+            dtNew.Columns.Add("dm_id", typeof(long));
+            DataTable dtJoin = dtNew.Copy();
+            try
+            {
+                var rowDataLeftOuter = from rowLeft in dt1.AsEnumerable()
+                                       join rowRight in dt2.AsEnumerable() on rowLeft["xl_cxkg"] equals rowRight["cxkg"] into gj
+                                       from subRight in gj.DefaultIfEmpty()
+                                       select new
+                                       {
+                                           oid = rowLeft.Field<long>("xl_oid"),
+                                           id = rowLeft.Field<string>("xl_sbid"),
+                                           sbmc = rowLeft.Field<string>("xl_mc"),
+                                           ssbdz = rowLeft.Field<string>("bdz_sbid"),
+                                           cxkgid = rowLeft.Field<long>("xl_cxkg"),
+                                           dm_id = rowLeft.Field<long>("xl_oid"),
+                                           mxh = subRight == null ? "" : subRight.Field<string>("mx_mc")
+                                       };
+                foreach (var obj in rowDataLeftOuter)
+                {
+                    dtJoin.Rows.Add(obj.oid, obj.id, obj.sbmc, obj.ssbdz, obj.mxh, obj.cxkgid, obj.dm_id);
+                }
+                dtNew.Columns.Add("dydj", typeof(string));
+                dtNew.Columns.Add("xedl", typeof(decimal));
+                dtNew.Columns.Add("xlsx", typeof(string));
+                var rowDataLeftOuter1 = from rowLeft in dtJoin.AsEnumerable()
+                                        join rowRight in dt3.AsEnumerable() on rowLeft["id"] equals rowRight["dwzy_id"] into gj
+                                        from subRight in gj.DefaultIfEmpty()
+                                        select new
+                                        {
+                                            oid = rowLeft.Field<long>("oid"),
+                                            id = rowLeft.Field<string>("id"),
+                                            sbmc = rowLeft.Field<string>("sbmc"),
+                                            ssbdz = rowLeft.Field<string>("ssbdz"),
+                                            cxkgid = rowLeft.Field<long>("cxkgid"),
+                                            dm_id = rowLeft.Field<long>("dm_id"),
+                                            mxh = rowLeft.Field<string>("mxh"),
+                                            dydj = subRight == null ? "" : subRight.Field<string>("DYDJ"),
+                                            xedl = subRight == null ? 0 : subRight.Field<decimal>("XEDL"),
+                                            xlsx = subRight == null ? "" : subRight.Field<string>("XLSX")
+                                        };
+                foreach (var obj in rowDataLeftOuter1)
+                {
+                    dtNew.Rows.Add(obj.oid, obj.id, obj.sbmc, obj.ssbdz, obj.mxh, obj.cxkgid, obj.dm_id, obj.dydj, obj.xedl, obj.xlsx);
+                }
+
+            }
+            catch (Exception ex)
+            {
+
+                throw new Exception(ex.StackTrace);
+            }
+            return dtNew;
+        } 
+        public static System.Data.DataTable JoinTableNew(DataTable dt1, System.Data.DataTable dt2, string field1, string field2)
+        {
+            System.Data.DataTable dtAll = new System.Data.DataTable();
+            try
+            {
+                GetColumns(dt1.Columns, ref dtAll);
+                GetColumns(dt2.Columns, ref dtAll);
+                var query = from tab1 in dt1.AsEnumerable()
+                            join tab2 in dt2.AsEnumerable()
+                            on tab1.Field<long>(field1) equals tab2.Field<long>(field2)
+                            select tab1.ItemArray.Concat(tab2.ItemArray.Skip(1));
+                foreach (var obj in query)
+                {
+                    DataRow dr = dtAll.NewRow();
+                    dr.ItemArray = obj.ToArray();
+                    dtAll.Rows.Add(dr);
+                }
+            }
+            catch (Exception ex)
+            {
+
+                throw new Exception(ex.StackTrace);
+            }
+            return dtAll;
+        }
+        public static System.Data.DataTable JoinTable1(System.Data.DataTable dt1, System.Data.DataTable dt2)
+        {
+            System.Data.DataTable dtAll = new System.Data.DataTable();
+            GetColumns(dt1.Columns, ref dtAll);
+            GetColumns(dt2.Columns, ref dtAll);
+            var query = from tab1 in dt1.AsEnumerable()
+                        from tab2 in dt2.AsEnumerable()
+                        where tab1.Field<string>("sbid") == tab2.Field<string>("sbid")
+                        select new
+                        {
+                            oid = tab1.Field<long>("oid"),
+                            equips = tab1.Field<string>("equips"),
+                            typeid = tab1.Field<long>("typeid"),
+                            chkg = tab1.Field<long>("chkg"),
+                            年份 = tab1.Field<int>("年份"),
+                            start_conn = tab1.Field<string>("start_conn"),
+                            end_conn = tab1.Field<string>("end_conn"),
+                            sbzlx = tab1.Field<long>("sbzlx"),
+                            type = tab1.Field<string>("type"),
+                            shape = tab1.Field<string>("shape"),
+                            devicetype = tab1.Field<int>("devicetype"),
+                            devicename = tab1.Field<string>("devicename"),
+                            blackname = tab1.Field<string>("blackname"),
+                            kgzt = tab1.Field<int>("kgzt"),
+                            sbid = tab1.Field<string>("sbid"),
+                            xlcd = tab1.Field<double>("xlcd"),
+                            NAME = tab2.Field<string>("NAME")
+                        };
+            System.Data.DataTable dtNew = dtAll.Copy();
+            foreach (var obj in query)
+            {
+                dtNew.Rows.Add(obj.oid, obj.equips, obj.typeid, obj.chkg, obj.年份, obj.start_conn, obj.end_conn, obj.sbzlx, obj.type, obj.shape, obj.devicetype, obj.devicename, obj.blackname, obj.kgzt, obj.sbid, obj.xlcd, obj.NAME);
+            }
+
+            return dtNew;
+        } 
+        public static T DicToObject<T>(Dictionary<string, object> dic) where T : new()
+        {
+            var nd = new T();
+            CultureInfo cultureInfo = Thread.CurrentThread.CurrentCulture;
+            TextInfo textInfo = cultureInfo.TextInfo;
+            foreach (var d in dic)
+            {
+                try
+                {
+                    var field = textInfo.ToTitleCase(d.Key);
+                    var value = d.Value;
+                    nd.GetType().GetProperty(field).SetValue(nd, value);
+                }
+                catch (Exception ex)
+                {
+                }
+            }
+            return nd;
+        }
+
+
+
+
+
+        public static void GetColumns(DataColumnCollection columns, ref DataTable dtAll)
+        {
+            foreach (System.Data.DataColumn column in columns)
+            {
+                string columnName = column.ColumnName;
+                if (dtAll.Columns.Contains(columnName))
+                {
+                    columnName = columnName + "_1";
+                }
+                dtAll.Columns.Add(columnName, column.DataType);
+            }
+        }
+        /// <summary>
+        /// Json 字符串 转换为 DataTable数据集合
+        /// </summary>
+        /// <param name="json"></param>
+        /// <returns></returns>
+        //public static DataTable ToDataTable(string json)
+        //{
+        //    DataTable dataTable = new DataTable();  //实例化
+        //    DataTable result;
+        //    try
+        //    {
+        //        JavaScriptSerializer javaScriptSerializer = new JavaScriptSerializer();
+        //        javaScriptSerializer.MaxJsonLength = Int32.MaxValue; //取得最大数值
+        //        ArrayList arrayList = javaScriptSerializer.Deserialize<ArrayList>(json);
+        //        if (arrayList.Count > 0)
+        //        {
+        //            foreach (Dictionary<string, object> dictionary in arrayList)
+        //            {
+        //                if (dictionary.Keys.Count<string>() == 0)
+        //                {
+        //                    result = dataTable;
+        //                    return result;
+        //                }
+        //                //Columns
+        //                if (dataTable.Columns.Count == 0)
+        //                {
+        //                    foreach (string current in dictionary.Keys)
+        //                    {
+        //                        if (current != "data")
+        //                            dataTable.Columns.Add(current, dictionary[current].GetType());
+        //                        else
+        //                        {
+        //                            ArrayList list = dictionary[current] as ArrayList;
+        //                            foreach (Dictionary<string, object> dic in list)
+        //                            {
+        //                                foreach (string key in dic.Keys)
+        //                                {
+        //                                    dataTable.Columns.Add(key, dic[key].GetType());
+        //                                }
+        //                                break;
+        //                            }
+        //                        }
+        //                    }
+        //                }
+        //                //Rows
+        //                string root = "";
+        //                foreach (string current in dictionary.Keys)
+        //                {
+        //                    if (current != "data")
+        //                        root = current;
+        //                    else
+        //                    {
+        //                        ArrayList list = dictionary[current] as ArrayList;
+        //                        foreach (Dictionary<string, object> dic in list)
+        //                        {
+        //                            DataRow dataRow = dataTable.NewRow();
+        //                            dataRow[root] = dictionary[root];
+        //                            foreach (string key in dic.Keys)
+        //                            {
+        //                                dataRow[key] = dic[key];
+        //                            }
+        //                            dataTable.Rows.Add(dataRow);
+        //                        }
+        //                    }
+        //                }
+        //            }
+        //        }
+        //    }
+        //    catch
+        //    {
+        //    }
+        //    result = dataTable;
+        //    return result;
+        //}
+
+    }
+}

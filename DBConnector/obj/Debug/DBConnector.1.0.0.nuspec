@@ -1,0 +1,45 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2012/06/nuspec.xsd">
+  <metadata>
+    <id>DBConnector</id>
+    <version>1.0.0</version>
+    <authors>DBConnector</authors>
+    <description>Package Description</description>
+    <dependencies>
+      <group targetFramework=".NETFramework4.7.2">
+        <dependency id="BouncyCastle" version="1.0.0" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.SqlServer.SqlManagementObjects" version="170.11.0" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.SqlServer.Types" version="14.0.314.76" exclude="Build,Analyzers" />
+        <dependency id="Newtonsoft.Json" version="13.0.2" exclude="Build,Analyzers" />
+        <dependency id="Npgsql" version="7.0.1" exclude="Build,Analyzers" />
+        <dependency id="Oracle.ManagedDataAccess" version="21.9.0" exclude="Build,Analyzers" />
+        <dependency id="System.Data.DataSetExtensions" version="4.5.0" exclude="Build,Analyzers" />
+        <dependency id="System.Data.SqlClient" version="4.8.5" exclude="Build,Analyzers" />
+      </group>
+      <group targetFramework=".NETCoreApp3.1">
+        <dependency id="BouncyCastle" version="1.0.0" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.SqlServer.SqlManagementObjects" version="170.11.0" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.SqlServer.Types" version="14.0.314.76" exclude="Build,Analyzers" />
+        <dependency id="Newtonsoft.Json" version="13.0.2" exclude="Build,Analyzers" />
+        <dependency id="Npgsql" version="7.0.1" exclude="Build,Analyzers" />
+        <dependency id="Oracle.ManagedDataAccess.Core" version="3.21.90" exclude="Build,Analyzers" />
+        <dependency id="System.Data.DataSetExtensions" version="4.5.0" exclude="Build,Analyzers" />
+        <dependency id="System.Data.SqlClient" version="4.8.5" exclude="Build,Analyzers" />
+      </group>
+    </dependencies>
+    <frameworkAssemblies>
+      <frameworkAssembly assemblyName="System.IO" targetFramework=".NETFramework4.7.2" />
+      <frameworkAssembly assemblyName="System.Net.Http" targetFramework=".NETFramework4.7.2" />
+      <frameworkAssembly assemblyName="System.Runtime" targetFramework=".NETFramework4.7.2" />
+      <frameworkAssembly assemblyName="System.Runtime.InteropServices.RuntimeInformation" targetFramework=".NETFramework4.7.2" />
+      <frameworkAssembly assemblyName="System.Security.Cryptography.Algorithms" targetFramework=".NETFramework4.7.2" />
+      <frameworkAssembly assemblyName="System.Security.Cryptography.Encoding" targetFramework=".NETFramework4.7.2" />
+      <frameworkAssembly assemblyName="System.Security.Cryptography.Primitives" targetFramework=".NETFramework4.7.2" />
+      <frameworkAssembly assemblyName="System.Security.Cryptography.X509Certificates" targetFramework=".NETFramework4.7.2" />
+    </frameworkAssemblies>
+  </metadata>
+  <files>
+    <file src="D:\Projects\DBConnector\bin\Debug\net472\DBConnector.dll" target="lib\net472\DBConnector.dll" />
+    <file src="D:\Projects\DBConnector\bin\Debug\netcoreapp3.1\DBConnector.dll" target="lib\netcoreapp3.1\DBConnector.dll" />
+  </files>
+</package>

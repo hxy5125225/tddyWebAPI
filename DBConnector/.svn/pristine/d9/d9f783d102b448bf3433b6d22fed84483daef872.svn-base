@@ -1,0 +1,88 @@
+﻿using Oracle.ManagedDataAccess.Client;
+using System;
+using System.Collections.Generic;
+using System.Data; 
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace DBConnector.Oracle
+{
+    public class OracleClass
+    {
+
+        public static DataTable QueryOracleDatabase(string sql)
+        {
+            DataTable dt = new DataTable();
+            try
+            {
+                using (OracleConnection cn = new OracleConnection(ConfigClass.OracleConString))
+                {
+                    cn.Open();
+                    using (OracleCommand cmd = new OracleCommand(sql, cn))
+                    {
+                        using (OracleDataReader reader = cmd.ExecuteReader())
+                        {
+                            if (!reader.HasRows) return dt;
+                            object[] value = new object[reader.FieldCount];
+                            dt = CreateTableBySchemaTable(reader.GetSchemaTable());
+                            while (reader.Read())
+                            {
+                                reader.GetValues(value);
+                                dt.LoadDataRow(value, true);
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                throw new Exception(ex.Message);
+            }
+            return dt;
+        }
+        public static DataTable QueryOracleDatabase(string sql, OracleConnection cn)
+        {
+            DataTable dt = new DataTable();
+            try
+            {
+                 if(cn.State!=ConnectionState.Open)
+                    cn.Open();
+                    using (OracleCommand cmd = new OracleCommand(sql, cn))
+                    {
+                        using (OracleDataReader reader = cmd.ExecuteReader())
+                        {
+                            if (!reader.HasRows) return dt;
+                            object[] value = new object[reader.FieldCount];
+                            dt = CreateTableBySchemaTable(reader.GetSchemaTable());
+                            while (reader.Read())
+                            {
+                                reader.GetValues(value);
+                                dt.LoadDataRow(value, true);
+                            }
+                        } 
+                }
+            }
+            catch (Exception ex)
+            {
+                throw new Exception(ex.Message);
+            }
+            return dt;
+        }
+        public static DataTable CreateTableBySchemaTable(DataTable pSchemaTable)
+        {
+            DataTable dtReturn = new DataTable();
+            DataColumn dc = null;
+            DataRow dr = null;
+            for (int i = 0; i < pSchemaTable.Rows.Count; i++)
+            {
+                dr = pSchemaTable.Rows[i];
+                dc = new DataColumn(dr["ColumnName"].ToString(), dr["DataType"] as Type);
+                dtReturn.Columns.Add(dc);
+            }
+            dr = null;
+            dc = null;
+            return dtReturn;
+        }
+    }
+}

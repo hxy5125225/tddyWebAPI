@@ -1,0 +1,102 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+
+namespace DBConnector
+{
+    public class INFO
+    {
+        public string code { get; set; }
+        public List<ResultValue> resultValue { get; set; }
+        public string success { get; set; }
+        public string type { get; set; }
+    }
+    public class ResultValue
+    {
+        public long oid { get; set; }
+        public List<ResultValueInfo> resultValue { get; set; }
+        public long typeid { get; set; }
+    }
+    public class ResultValueInfo
+    {
+        public List<DeviceInfo> lastequips { get; set; }
+        public List<DeviceInfo> otherequips { get; set; }
+        public List<DeviceInfo> stopequips { get; set; }
+    }
+    public class TableInfo
+    {
+        public long oid { get; set; }
+        public string equips { get; set; }
+        public string typeid { get; set; }
+        public long chkg { get; set; }
+    }
+    public class DeviceInfo
+    {
+        public long typeid { get; set; }
+        public long oid { get; set; }
+    }
+    public class ParaInfo
+    {
+        public List<DeviceInfo> equip { get; set; }
+    }
+    public class LoadInfo
+    {
+        public List<LoadData> data { get; set; }
+        public string serviceCode { get; set; }
+        public string user { get; set; }
+    }
+    /// <summary>
+    /// 负荷参数
+    /// </summary>
+    public class LoadData
+    {
+        public string srvCode { get; set; }
+        public string equipId { get; set; }
+        public string equipType { get; set; }
+        public string sgcode { get; set; }
+        public string funcCode { get; set; }
+        public string periods { get; set; }
+        public string deptcode { get; set; }
+        public string type { get; set; }
+        public string serialNo { get; set; }
+    }
+    /// <summary>
+    /// 任务状态
+    /// </summary>
+    public class TaskCompleteStatu
+    { 
+        public string task_id { get; set; }
+        /// <summary>
+        /// 1为任务开始
+        /// </summary>
+        public int task_start { get; set; }
+        public string start_time { get; set; }
+        /// <summary>
+        /// 1为任务异常
+        /// </summary>
+        public int task_fail { get; set; }
+        public string fail_time { get; set; }
+        /// <summary>
+        /// 任务完成1
+        /// </summary>
+        public int task_finish { get; set; }
+        public string finish_time { get; set; }
+        /// <summary>
+        /// 省级编码
+        /// </summary>
+        public string sg_code { get; set; }
+        /// <summary>
+        /// 区域编码
+        /// </summary>
+        public string qy_id { get; set; }
+        /// <summary>
+        /// 备注
+        /// </summary>
+        public int is_call_load { get; set; }
+        public object[] ToArray()
+        { 
+            return new object[] { task_id, task_start , start_time, task_fail, fail_time, task_finish, finish_time, sg_code , qy_id, is_call_load };
+        }
+    } 
+}

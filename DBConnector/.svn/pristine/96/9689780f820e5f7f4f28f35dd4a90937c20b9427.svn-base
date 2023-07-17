@@ -1,0 +1,1577 @@
+﻿
+using DBConnector.SQLServer;
+using Microsoft.SqlServer.Server;
+using Npgsql;
+using System;
+using System.Collections;
+using System.Data;
+using System.Data.SqlClient;
+using static DBConnector.TableEntity;
+
+namespace DBConnector
+{
+    [System.Security.SecuritySafeCritical]
+    public class GraphProcedure
+    {
+
+        public static int Proc_WithReturnValue(string DatabaseName, string UnitSerialNumber)
+        {
+            string returnvalue = "success";
+            try
+            {
+                string sql = LightweightRAS.PublicKeyDecrypt(GZipUtil.UnZip(TddyProCal.Func_BDZ_DanXian));
+                sql = string.Format(sql, DatabaseName);
+                using (SqlConnection cn = new SqlConnection(" context connection=true "))
+                {
+                    using (SqlCommand cmd = cn.CreateCommand())
+                    {
+                        //cmd.CommandText = sql;
+                        //cmd.Parameters.Add("@output", SqlDbType.NVarChar, 3900).Direction = ParameterDirection.Output;
+                        //SqlParameter p = new SqlParameter("@DanWeiXuHao", DbType.Guid);
+                        //p.Value = UnitSerialNumber;
+                        //cmd.Parameters.Add(p);
+                        //cn.Open();
+                        //cmd.ExecuteNonQuery();
+                        //output = cmd.Parameters["@output"].Value.ToString();
+                    }
+                }
+                SqlContext.Pipe.Send(returnvalue);
+            }
+            catch (System.Exception e)
+            {
+
+            }
+            return 1;
+        }
+
+        public static void Proc_Void(string DatabaseName, string UnitSerialNumber)
+        {
+
+            try
+            {
+                string sql = LightweightRAS.PublicKeyDecrypt(GZipUtil.UnZip(TddyProCal.Func_BDZ_DanXian));
+                sql = string.Format(sql, DatabaseName);
+                using (SqlConnection cn = new SqlConnection(" context connection=true "))
+                {
+                    using (SqlCommand cmd = cn.CreateCommand())
+                    {
+                        //cmd.CommandText = sql;
+                        //SqlParameter p = new SqlParameter("@DanWeiXuHao", DbType.Guid);
+                        //p.Value = UnitSerialNumber;
+                        //cmd.Parameters.Add(p);
+                        //cn.Open();
+                        //cmd.ExecuteNonQuery();
+                    }
+                }
+            }
+            catch (System.Exception e)
+            {
+
+            }
+        }
+        public static string Fn_String(string DatabaseName, string DanWeiXuHao, string ID, string DianYaDengJi, int NianFen)
+        {
+            SqlDataReader message;
+            string returnvalue = null;
+            string sql = LightweightRAS.PublicKeyDecrypt(GZipUtil.UnZip(TddyProCal.Func_BDZ_DanXian));
+            sql = string.Format(sql, DatabaseName);
+            using (SqlConnection cn = new SqlConnection(" context connection=true "))
+            {
+                using (SqlCommand cmd = cn.CreateCommand())
+                {
+                    cmd.CommandText = sql;
+                    SqlParameter p = new SqlParameter("@DanWeiXuHao", DbType.Guid);
+                    p.Value = DanWeiXuHao;
+                    cmd.Parameters.Add(p);
+                    cmd.Parameters.AddWithValue("@ID", ID);
+                    cmd.Parameters.AddWithValue("@DianYaDengJi", DianYaDengJi);
+                    cmd.Parameters.AddWithValue("@NianFen", NianFen);
+                    cn.Open();
+                    cmd.ExecuteNonQuery();
+                    message = cmd.ExecuteReader();
+                    while (message.Read())
+                    {
+                        returnvalue = message[0] as string;
+                    }
+                }
+            }
+            return returnvalue;
+        }
+
+
+        public static Microsoft.SqlServer.Types.SqlGeometry Fn_SqlGeometry(string DatabaseName, string DanWeiXuHao, string ID, int NianFen)
+        {
+            
+            string strgeo = "LINESTRING (12599589.9863105 3218938.86436906, 12602640.3745149 3220282.96858519, 12602639.8300026 3225022.73100573, 12602639.8298464 3225024.09017537, 12602638.7593747 3234342.11937947, 12597933.7189508 3234402.14991523, 12597487.5107033 3233635.9925447)";
+            string sql = LightweightRAS.PublicKeyDecrypt(GZipUtil.UnZip(TddyProCal.Func_BDZ_DanXian));
+            sql = string.Format(sql, DatabaseName);
+            using (SqlConnection cn = new SqlConnection(" context connection=true "))
+            {
+                using (SqlCommand cmd = cn.CreateCommand())
+                {
+                    //cmd.CommandText = sql;
+                    //SqlParameter p = new SqlParameter("@DanWeiXuHao", DbType.Guid);
+                    //p.Value = DanWeiXuHao;
+                    //cmd.Parameters.Add(p);
+                    //cmd.Parameters.AddWithValue("@ID", ID);
+                    //cmd.Parameters.AddWithValue("@NianFen", NianFen);
+                    //cn.Open();
+                    //cmd.ExecuteNonQuery();
+                    //message = cmd.ExecuteReader();
+                    //while (message.Read())
+                    //{
+                    //    returnvalue = message[0] as string;
+                    //}
+                }
+            }
+            return Microsoft.SqlServer.Types.SqlGeometry.Parse(strgeo);
+        }
+        public static float Fn_Float(string DatabaseName, string DanWeiXuHao, string ID, int NianFen)
+        {
+            SqlDataReader message;
+            float returnvalue = 0.01F;
+            string sql = LightweightRAS.PublicKeyDecrypt(GZipUtil.UnZip(TddyProCal.Func_BDZ_DanXian));
+            sql = string.Format(sql, DatabaseName);
+            using (SqlConnection cn = new SqlConnection(" context connection=true "))
+            {
+                using (SqlCommand cmd = cn.CreateCommand())
+                {
+                    //cmd.CommandText = sql;
+                    //SqlParameter p = new SqlParameter("@DanWeiXuHao", DbType.Guid);
+                    //p.Value = DanWeiXuHao;
+                    //cmd.Parameters.Add(p);
+                    //cmd.Parameters.AddWithValue("@ID", ID);
+                    //cmd.Parameters.AddWithValue("@NianFen", NianFen);
+                    //cn.Open();
+                    //cmd.ExecuteNonQuery();
+                    //message = cmd.ExecuteReader();
+                    //while (message.Read())
+                    //{
+                    //    returnvalue = message[0] as string;
+                    //}
+                }
+            }
+            return returnvalue;
+        }
+
+
+        public static double Fn_Double(string DatabaseName, string DanWeiXuHao, string ID, int NianFen)
+        {
+            SqlDataReader message;
+            double returnvalue = 0.0001;
+            string sql = LightweightRAS.PublicKeyDecrypt(GZipUtil.UnZip(TddyProCal.Func_BDZ_DanXian));
+            sql = string.Format(sql, DatabaseName);
+            using (SqlConnection cn = new SqlConnection(" context connection=true "))
+            {
+                using (SqlCommand cmd = cn.CreateCommand())
+                {
+                    //cmd.CommandText = sql;
+                    //SqlParameter p = new SqlParameter("@DanWeiXuHao", DbType.Guid);
+                    //p.Value = DanWeiXuHao;
+                    //cmd.Parameters.Add(p);
+                    //cmd.Parameters.AddWithValue("@ID", ID);
+                    //cmd.Parameters.AddWithValue("@NianFen", NianFen);
+                    //cn.Open();
+                    //cmd.ExecuteNonQuery();
+                    //message = cmd.ExecuteReader();
+                    //while (message.Read())
+                    //{
+                    //    returnvalue = message[0] as string;
+                    //}
+                }
+            }
+            return returnvalue;
+        }
+        public static ArrayList commonFn(string DatabaseName, int flag)
+        {
+            SqlDataReader message = null;
+            ArrayList list = new ArrayList();
+            DataTable datatable = new DataTable();
+            DBConnector.TableEntity.TableEntityYear entity;
+            try
+            {
+                string sql = LightweightRAS.PublicKeyDecrypt(GZipUtil.UnZip(TddyProCal.fn_year));
+                using (SqlConnection cn = new SqlConnection(" context connection=true "))
+                {
+                    using (SqlCommand cmd = cn.CreateCommand())
+                    {
+                        cmd.CommandText = sql;
+                        cn.Open();
+                        cmd.ExecuteNonQuery();
+                        message = cmd.ExecuteReader();
+                        if (message == null) list.Add(new DateTime().Year);
+                        for (int i = 0; i < message.FieldCount; i++)
+                        {
+                            DataColumn myDataColumn = new DataColumn();
+                            myDataColumn.DataType = message.GetFieldType(i);
+                            myDataColumn.ColumnName = message.GetName(i);
+                            datatable.Columns.Add(myDataColumn);
+                        }
+                        ///添加表的数据
+                        while (message.Read())
+                        {
+                            DataRow myDataRow = datatable.NewRow();
+                            for (int i = 0; i < message.FieldCount; i++)
+                            {
+                                myDataRow[i] = message[i];
+                            }
+                            datatable.Rows.Add(myDataRow);
+                            myDataRow = null;
+                        }
+                        for (int i = 0; i < datatable.Rows.Count; i++)
+                        {
+
+                            if (flag == 1)
+                            {
+                                list.Add(datatable.Rows[i][0]);
+                            }
+                            else if (flag == 2)
+                            {
+                                entity = new DBConnector.TableEntity.TableEntityYear();
+                                entity.guid = (string)datatable.Rows[i][0];
+                                entity.value = int.Parse((string)datatable.Rows[i][1]);
+                                list.Add(entity);
+                            }
+                            else if (flag == 3)
+                            {
+
+                            }
+                        }
+                    }
+                }
+            }
+            catch (System.Exception e)
+            {
+
+            }
+            return list;
+        }
+
+        public static void Proc_BuildColumns(string DatabaseName)
+        {
+            try
+            {
+                string sql = LightweightRAS.PublicKeyDecrypt(GZipUtil.UnZip(TddyProCal.Proc_BuildColumns));
+                sql = string.Format(sql, DatabaseName);
+                using (SqlConnection cn = new SqlConnection(" context connection=true "))
+                {
+                    using (SqlCommand cmd = cn.CreateCommand())
+                    {
+                        cmd.CommandText = sql;
+                        //SqlParameter p = new SqlParameter("@DanWeiXuHao", DbType.Guid);
+                        //p.Value = UnitSerialNumber;
+                        //cmd.Parameters.Add(p);
+                        cn.Open();
+                        cmd.ExecuteNonQuery();
+                    }
+                }
+            }
+            catch (System.Exception e) { }
+        }
+
+
+        //public static ArrayList FN_subcapacity(string DatabaseName, int flag)
+        //{
+        //    SqlDataReader message = null;
+        //    ArrayList list = new ArrayList();
+        //    DataTable datatable = new DataTable();
+        //    TableEntityYear entity;
+        //    try
+        //    {
+        //        string sql = LightweightRAS.PublicKeyDecrypt(GZipUtil.UnZip(TddyProCal.FN_subcapacity));
+        //        using (SqlConnection cn = new SqlConnection(" context connection=true "))
+        //        {
+        //            using (SqlCommand cmd = cn.CreateCommand())
+        //            {
+        //                cmd.CommandText = sql;
+        //                cn.Open();
+        //                cmd.ExecuteNonQuery();
+        //                message = cmd.ExecuteReader();
+        //                if (message == null) list.Add(new DateTime().Year);
+        //                for (int i = 0; i < message.FieldCount; i++)
+        //                {
+        //                    DataColumn myDataColumn = new DataColumn();
+        //                    myDataColumn.DataType = message.GetFieldType(i);
+        //                    myDataColumn.ColumnName = message.GetName(i);
+        //                    datatable.Columns.Add(myDataColumn);
+        //                }
+        //                ///添加表的数据
+        //                while (message.Read())
+        //                {
+        //                    DataRow myDataRow = datatable.NewRow();
+        //                    for (int i = 0; i < message.FieldCount; i++)
+        //                    {
+        //                        myDataRow[i] = message[i];
+        //                    }
+        //                    datatable.Rows.Add(myDataRow);
+        //                    myDataRow = null;
+        //                }
+        //                for (int i = 0; i < datatable.Rows.Count; i++)
+        //                {
+
+        //                    if (flag == 1)
+        //                    {
+        //                        list.Add(datatable.Rows[i][0]);
+        //                    }
+        //                    else if (flag == 2)
+        //                    {
+        //                        entity = new TableEntityYear();
+        //                        entity.guid = (string)datatable.Rows[i][0];
+        //                        entity.value = int.Parse((string)datatable.Rows[i][1]);
+        //                        list.Add(entity);
+        //                    }
+        //                    else if (flag == 3)
+        //                    {
+
+        //                    }
+        //                }
+        //            }
+        //        }
+        //    }
+        //    catch (System.Exception e)
+        //    {
+
+        //    }
+        //    return list;
+        //}
+
+               
+        public static void Proc_SyncData_Server(string DatabaseName, string AreaName, string TableT)
+        {
+            try
+            {
+                string sql = LightweightRAS.PublicKeyDecrypt(GZipUtil.UnZip(TddyProCal.Proc_SyncData_Server));
+                sql = string.Format(sql, DatabaseName);
+                using (SqlConnection cn = new SqlConnection(" context connection=true "))
+                {
+                    using (SqlCommand cmd = cn.CreateCommand())
+                    {
+                        cmd.CommandText = sql;
+                        cmd.Parameters.AddWithValue("@AreaName", AreaName);
+                        cmd.Parameters.AddWithValue("@TableT", TableT);
+                        cn.Open();
+                        cmd.ExecuteNonQuery();
+                    }
+                }
+            }
+            catch (System.Exception e) { }
+        }
+
+        public static void Proc_SyncData_Server_all(string DatabaseName, string AreaName, string TableT)
+        {
+            try
+            {
+                string sql = LightweightRAS.PublicKeyDecrypt(GZipUtil.UnZip(TddyProCal.Proc_SyncData_Server_all));
+                sql = string.Format(sql, DatabaseName);
+                using (SqlConnection cn = new SqlConnection(" context connection=true "))
+                {
+                    using (SqlCommand cmd = cn.CreateCommand())
+                    {
+                        cmd.CommandText = sql;
+                        cmd.Parameters.AddWithValue("@AreaName", AreaName);
+                        cmd.Parameters.AddWithValue("@TableT", TableT);
+                        cn.Open();
+                        cmd.ExecuteNonQuery();
+                    }
+                }
+            }
+            catch (System.Exception e) { }
+        }
+
+        public static void Proc_SyncData_Server_all_tracking(string DatabaseName, string AreaName, string TableT)
+        {
+            try
+            {
+                string sql = LightweightRAS.PublicKeyDecrypt(GZipUtil.UnZip(TddyProCal.Proc_SyncData_Server_all_tracking));
+                sql = string.Format(sql, DatabaseName);
+                using (SqlConnection cn = new SqlConnection(" context connection=true "))
+                {
+                    using (SqlCommand cmd = cn.CreateCommand())
+                    {
+                        cmd.CommandText = sql;
+                        cmd.Parameters.AddWithValue("@AreaName", AreaName);
+                        cmd.Parameters.AddWithValue("@TableT", TableT);
+                        cn.Open();
+                        cmd.ExecuteNonQuery();
+                    }
+                }
+            }
+            catch (System.Exception e) { }
+        }
+
+
+        public static int Proc_SyncData_Server_Download(string DatabaseName, string AreaName, string TableT, string LastSyncTime,string output)
+        {
+            //string returnvalue = "success";
+            try
+            {
+                string sql = LightweightRAS.PublicKeyDecrypt(GZipUtil.UnZip(TddyProCal.Proc_SyncData_Server_Download));
+                sql = string.Format(sql, DatabaseName);
+                using (SqlConnection cn = new SqlConnection(" context connection=true "))
+                {
+                    using (SqlCommand cmd = cn.CreateCommand())
+                    {
+                        cmd.CommandText = sql;
+                        cmd.Parameters.Add("@output", SqlDbType.NVarChar, 3900).Direction = ParameterDirection.Output;
+                        cmd.Parameters.AddWithValue("@AreaName", AreaName);
+                        cmd.Parameters.AddWithValue("@TableT", TableT);
+                        cmd.Parameters.AddWithValue("@LastSyncTime", LastSyncTime);
+                        cn.Open();
+                        cmd.ExecuteNonQuery();
+                        output = cmd.Parameters["@N"].Value.ToString();
+                    }
+                }
+                SqlContext.Pipe.Send(output);
+            }
+            catch (System.Exception e) { }
+            return 1;
+        }
+
+        public static int Proc_SyncData_Server_Table(string DatabaseName, string AreaName, string TableT, string output)
+        {
+            //string returnvalue = "success";
+            try
+            {
+                string sql = LightweightRAS.PublicKeyDecrypt(GZipUtil.UnZip(TddyProCal.Proc_SyncData_Server_Table));
+                sql = string.Format(sql, DatabaseName);
+                using (SqlConnection cn = new SqlConnection(" context connection=true "))
+                {
+                    using (SqlCommand cmd = cn.CreateCommand())
+                    {
+                        cmd.CommandText = sql;
+                        cmd.Parameters.Add("@output", SqlDbType.NVarChar, 3900).Direction = ParameterDirection.Output;
+                        cmd.Parameters.AddWithValue("@AreaName", AreaName);
+                        cmd.Parameters.AddWithValue("@TableT", TableT);
+                        cn.Open();
+                        cmd.ExecuteNonQuery();
+                        output = cmd.Parameters["@sqlservertable"].Value.ToString();
+                    }
+                }
+                SqlContext.Pipe.Send(output);
+            }
+            catch (System.Exception e) { }
+            return 1;
+        }
+
+
+        public static void Proc_SyncData_Server_tracking(string DatabaseName, string AreaName)
+        {
+            try
+            {
+                string sql = LightweightRAS.PublicKeyDecrypt(GZipUtil.UnZip(TddyProCal.Proc_SyncData_Server_tracking));
+                sql = string.Format(sql, DatabaseName);
+                using (SqlConnection cn = new SqlConnection(" context connection=true "))
+                {
+                    using (SqlCommand cmd = cn.CreateCommand())
+                    {
+                        cmd.CommandText = sql;
+                        cmd.Parameters.AddWithValue("@AreaName", AreaName);
+                        cn.Open();
+                        cmd.ExecuteNonQuery();
+                    }
+                }
+            }
+            catch (System.Exception e) { }
+        }
+
+        public static void p_cmd_unrar_copy(string DatabaseName, string fullfilepath, string tofilepath)
+        {
+            try
+            {
+                string sql = LightweightRAS.PublicKeyDecrypt(GZipUtil.UnZip(TddyProCal.p_cmd_unrar_copy));
+                sql = string.Format(sql, DatabaseName);
+                using (SqlConnection cn = new SqlConnection(" context connection=true "))
+                {
+                    using (SqlCommand cmd = cn.CreateCommand())
+                    {
+                        cmd.CommandText = sql;
+                        cmd.Parameters.AddWithValue("@fullfilepath", fullfilepath);
+                        cmd.Parameters.AddWithValue("@tofilepath", tofilepath);
+                        cn.Open();
+                        cmd.ExecuteNonQuery();
+                    }
+                }
+            }
+            catch (System.Exception e) { }
+        }
+
+
+        public static void Proc_CheckData(string DatabaseName, string Tablename, string Columnname, string CountyID)
+        {
+            try
+            {
+                string sql = LightweightRAS.PublicKeyDecrypt(GZipUtil.UnZip(TddyProCal.Proc_CheckData));
+                sql = string.Format(sql, DatabaseName);
+                using (SqlConnection cn = new SqlConnection(" context connection=true "))
+                {
+                    using (SqlCommand cmd = cn.CreateCommand())
+                    {
+                        cmd.CommandText = sql;
+                        cmd.Parameters.AddWithValue("@Tablename", Tablename);
+                        cmd.Parameters.AddWithValue("@Columnname", Columnname);
+                        SqlParameter p = new SqlParameter("@CountyID", DbType.Guid);
+                        p.Value = CountyID;
+                        cmd.Parameters.Add(p);
+                        cn.Open();
+                        cmd.ExecuteNonQuery();
+                    }
+                }
+            }
+            catch (System.Exception e) { }
+        }
+
+        public static void Proc_CompareData(string DatabaseName, string Tablename, int GetYear, string Columnname, string CountyID)
+        {
+            try
+            {
+                string sql = LightweightRAS.PublicKeyDecrypt(GZipUtil.UnZip(TddyProCal.Proc_CompareData));
+                sql = string.Format(sql, DatabaseName);
+                using (SqlConnection cn = new SqlConnection(" context connection=true "))
+                {
+                    using (SqlCommand cmd = cn.CreateCommand())
+                    {
+                        cmd.CommandText = sql;
+                        cmd.Parameters.AddWithValue("@Tablename", Tablename);
+                        cmd.Parameters.AddWithValue("@GetYear", GetYear);
+                        cmd.Parameters.AddWithValue("@Columnname", Columnname);
+                        SqlParameter p = new SqlParameter("@CountyID", DbType.Guid);
+                        p.Value = CountyID;
+                        cmd.Parameters.Add(p);
+                        cn.Open();
+                        cmd.ExecuteNonQuery();
+                    }
+                }
+            }
+            catch (System.Exception e) { }
+        }
+
+
+        public static void Proc_MergeData(string DatabaseName, string Tablename, int GetYear, string Columnname, string CountyID)
+        {
+            try
+            {
+                string sql = LightweightRAS.PublicKeyDecrypt(GZipUtil.UnZip(TddyProCal.Proc_MergeData));
+                sql = string.Format(sql, DatabaseName);
+                using (SqlConnection cn = new SqlConnection(" context connection=true "))
+                {
+                    using (SqlCommand cmd = cn.CreateCommand())
+                    {
+                        cmd.CommandText = sql;
+                        cmd.Parameters.AddWithValue("@Tablename", Tablename);
+                        cmd.Parameters.AddWithValue("@GetYear", GetYear);
+                        cmd.Parameters.AddWithValue("@Columnname", Columnname);
+                        SqlParameter p = new SqlParameter("@CountyID", DbType.Guid);
+                        p.Value = CountyID;
+                        cmd.Parameters.Add(p);
+                        cn.Open();
+                        cmd.ExecuteNonQuery();
+                    }
+                }
+            }
+            catch (System.Exception e) { }
+        }
+
+
+
+        public static string Func_Shujvjiaoyan(string DatabaseName, string Leibie, string field)
+        {
+            SqlDataReader message;
+            string returnvalue = null;
+            string sql = LightweightRAS.PublicKeyDecrypt(GZipUtil.UnZip(TddyProCal.Func_Shujvjiaoyan));
+            sql = string.Format(sql, DatabaseName);
+            using (SqlConnection cn = new SqlConnection(" context connection=true "))
+            {
+                using (SqlCommand cmd = cn.CreateCommand())
+                {
+                    cmd.CommandText = sql;
+                    cmd.Parameters.AddWithValue("@Leibie", Leibie);
+                    cmd.Parameters.AddWithValue("@field", field);
+                    cn.Open();
+                    cmd.ExecuteNonQuery();
+                    message = cmd.ExecuteReader();
+                    while (message.Read())
+                    {
+                        returnvalue = message[0] as string;
+                    }
+                }
+            }
+            return returnvalue;
+        }
+
+
+        public static void Proc_Changed_Basicdata(string DatabaseName, string Area, string Tablename, int Year)
+        {
+            try
+            {
+                string sql = LightweightRAS.PublicKeyDecrypt(GZipUtil.UnZip(TddyProCal.Proc_Changed_Basicdata));
+                sql = string.Format(sql, DatabaseName);
+                using (SqlConnection cn = new SqlConnection(" context connection=true "))
+                {
+                    using (SqlCommand cmd = cn.CreateCommand())
+                    {
+                        cmd.CommandText = sql;
+                        cmd.Parameters.AddWithValue("@Area", Area);
+                        cmd.Parameters.AddWithValue("@Tablename", Tablename);
+                        cmd.Parameters.AddWithValue("@Year", Year);
+                        cn.Open();
+                        cmd.ExecuteNonQuery();
+                    }
+                }
+            }
+            catch (System.Exception e) { }
+        }
+
+        public static void Proc_BuildTopoGraphMsg(string DatabaseName, string CountyID)
+        {
+            try
+            {
+                string sql = LightweightRAS.PublicKeyDecrypt(GZipUtil.UnZip(TddyProCal.Proc_BuildTopoGraphMsg));
+                sql = string.Format(sql, DatabaseName);
+                using (SqlConnection cn = new SqlConnection(" context connection=true "))
+                {
+                    using (SqlCommand cmd = cn.CreateCommand())
+                    {
+                        cmd.CommandText = sql;
+                        cmd.Parameters.AddWithValue("@CountyID", CountyID);
+                        cn.Open();
+                        cmd.ExecuteNonQuery();
+                    }
+                }
+            }
+            catch (System.Exception e) { }
+        }
+
+        public static void Proc_BuildTopoGraphMsg_update(string DatabaseName, string CountyID)
+        {
+            try
+            {
+                string sql = LightweightRAS.PublicKeyDecrypt(GZipUtil.UnZip(TddyProCal.Proc_BuildTopoGraphMsg_update));
+                sql = string.Format(sql, DatabaseName);
+                using (SqlConnection cn = new SqlConnection(" context connection=true "))
+                {
+                    using (SqlCommand cmd = cn.CreateCommand())
+                    {
+                        cmd.CommandText = sql;
+                        cmd.Parameters.AddWithValue("@CountyID", CountyID);
+                        cn.Open();
+                        cmd.ExecuteNonQuery();
+                    }
+                }
+            }
+            catch (System.Exception e) { }
+        }
+
+        public static void Proc_ShengChengTaiZhang(string DatabaseName, string Area)
+        {
+            try
+            {
+                string sql = LightweightRAS.PublicKeyDecrypt(GZipUtil.UnZip(TddyProCal.Proc_ShengChengTaiZhang));
+                sql = string.Format(sql, DatabaseName);
+                using (SqlConnection cn = new SqlConnection(" context connection=true "))
+                {
+                    using (SqlCommand cmd = cn.CreateCommand())
+                    {
+                        cmd.CommandText = sql;
+                        cmd.Parameters.AddWithValue("@Area", Area);
+                        cn.Open();
+                        cmd.ExecuteNonQuery();
+                    }
+                }
+            }
+            catch (System.Exception e) { }
+        }
+
+        public static void Proc_ChangeColour(string DatabaseName, string DW, int Year, string Class, string ID, int Colour, int TF)
+        {
+            try
+            {
+                string sql = LightweightRAS.PublicKeyDecrypt(GZipUtil.UnZip(TddyProCal.Proc_ChangeColour));
+                sql = string.Format(sql, DatabaseName);
+                using (SqlConnection cn = new SqlConnection(" context connection=true "))
+                {
+                    using (SqlCommand cmd = cn.CreateCommand())
+                    {
+                        cmd.CommandText = sql;
+                        cmd.Parameters.AddWithValue("@DW", DW);
+                        cmd.Parameters.AddWithValue("@Year", Year);
+                        cmd.Parameters.AddWithValue("@Class", Class);
+                        cmd.Parameters.AddWithValue("@ID", ID);
+                        cmd.Parameters.AddWithValue("@Colour", Colour);
+                        cmd.Parameters.AddWithValue("@TF", TF);
+                        cn.Open();
+                        cmd.ExecuteNonQuery();
+                    }
+                }
+            }
+            catch (System.Exception e) { }
+        }
+
+
+        public static ArrayList FN_connline(string DatabaseName, string ID, int Year,int flag)
+        {
+            SqlDataReader message = null;
+            ArrayList list = new ArrayList();
+            DataTable datatable = new DataTable();
+            TableEntityYear entity;
+            try
+            {
+                string sql = LightweightRAS.PublicKeyDecrypt(GZipUtil.UnZip(TddyProCal.FN_connline));
+                using (SqlConnection cn = new SqlConnection(" context connection=true "))
+                {
+                    using (SqlCommand cmd = cn.CreateCommand())
+                    {
+                        cmd.CommandText = sql;
+                        cmd.Parameters.AddWithValue("@ID", ID);
+                        cmd.Parameters.AddWithValue("@Year", Year);
+                        cn.Open();
+                        cmd.ExecuteNonQuery();
+                        message = cmd.ExecuteReader();
+                        if (message == null) list.Add(new DateTime().Year);
+                        for (int i = 0; i < message.FieldCount; i++)
+                        {
+                            DataColumn myDataColumn = new DataColumn();
+                            myDataColumn.DataType = message.GetFieldType(i);
+                            myDataColumn.ColumnName = message.GetName(i);
+                            datatable.Columns.Add(myDataColumn);
+                        }
+                        ///添加表的数据
+                        while (message.Read())
+                        {
+                            DataRow myDataRow = datatable.NewRow();
+                            for (int i = 0; i < message.FieldCount; i++)
+                            {
+                                myDataRow[i] = message[i];
+                            }
+                            datatable.Rows.Add(myDataRow);
+                            myDataRow = null;
+                        }
+                        for (int i = 0; i < datatable.Rows.Count; i++)
+                        {
+
+                            if (flag == 1)
+                            {
+                                list.Add(datatable.Rows[i][0]);
+                            }
+                            else if (flag == 2)
+                            {
+                                entity = new TableEntityYear();
+                                entity.guid = (string)datatable.Rows[i][0];
+                                entity.value = int.Parse((string)datatable.Rows[i][1]);
+                                list.Add(entity);
+                            }
+                            else if (flag == 3)
+                            {
+
+                            }
+                        }
+                    }
+                }
+            }
+            catch (System.Exception e)
+            {
+
+            }
+            return list;
+        }
+
+        //生成项目建议书
+        public static int GenerateProjectProposal(int dbtype, string connection, string UnitSerialNumber, string DatabaseName, string sql)
+        {
+            try
+            {
+                if (dbtype == 0)//sqlserver
+                {
+                    using (SqlConnection cn = new SqlConnection(connection))
+                    {
+                        using (SqlCommand cmd = cn.CreateCommand())
+                        {
+                            cmd.CommandText = string.Format(sql, DatabaseName);
+                            cmd.Parameters.AddWithValue("@Area", UnitSerialNumber);
+                            cn.Open();
+                            cmd.ExecuteNonQuery();
+                        }
+                    }
+                }
+                else//PG dbtype == 1
+                {
+                    using (NpgsqlConnection cn = new NpgsqlConnection(connection))
+                    {
+                        using (NpgsqlCommand cmd = new NpgsqlCommand())
+                        {
+                            cmd.CommandText = string.Format(sql, DatabaseName);
+                            cmd.Parameters.Add("@Area", UnitSerialNumber);
+                            cn.Open();
+                            cmd.ExecuteNonQuery();
+                        }
+                    }
+                }
+            }
+            catch (System.Exception e) { }
+            return -1;
+
+        }
+
+       
+        //产生拓扑校验数据
+        public static int GengenerateSingleTopologyDataCheck(int dbtype,string conntect, string UnitSerialNumber, string DatabaseName, int year, string FID, string datetime, string sql)
+        {
+
+            try
+            {
+                if (dbtype == 0)//sqlserver
+                {
+                    using (SqlConnection cn = new SqlConnection(conntect))
+                    {
+                        using (SqlCommand cmd = cn.CreateCommand())
+                        {
+                            cmd.CommandText = string.Format(sql, DatabaseName);
+                            cmd.Parameters.AddWithValue("@Area", UnitSerialNumber);
+                            cmd.Parameters.AddWithValue("@Year", year);
+                            cmd.Parameters.AddWithValue("@ID", FID);
+                            cmd.Parameters.AddWithValue("@Datetime", datetime);
+                            cn.Open();
+                            cmd.ExecuteNonQuery();
+                        }
+                    }
+                }
+                else//PGdbtype == 1
+                {
+                    using (NpgsqlConnection cn = new NpgsqlConnection(conntect))
+                    {
+                        using (NpgsqlCommand cmd = new NpgsqlCommand())
+                        {
+                            cmd.CommandText = string.Format(sql, DatabaseName);
+                            cmd.Parameters.Add("@Area", UnitSerialNumber);
+                            cmd.Parameters.Add("@Year", year);
+                            cmd.Parameters.Add("@ID", FID);
+                            cmd.Parameters.Add("@Datetime", datetime);
+                            cn.Open();
+                            cmd.ExecuteNonQuery();
+                        }
+                    }
+                }
+            }
+            catch (System.Exception e) { }
+            return -1;
+        }
+        //产生全区拓扑计算数据
+        public static int GengenerateRegionTopologyData(int dbtype,string conntect, string UnitSerialNumber, string DatabaseName, int year, string datetime, string sql)
+        {
+            try
+            {
+                if (dbtype == 0)//sqlserver
+                {
+                    using (SqlConnection cn = new SqlConnection(conntect))
+                    {
+                        using (SqlCommand cmd = cn.CreateCommand())
+                        {
+                            cmd.CommandText = string.Format(sql, DatabaseName);
+                            cmd.Parameters.AddWithValue("@Area", UnitSerialNumber);
+                            cmd.Parameters.AddWithValue("@Year", year);
+                            cmd.Parameters.AddWithValue("@Datetime", datetime);
+                            cn.Open();
+                            cmd.ExecuteNonQuery();
+                        }
+                    }
+                }
+                else//PG dbtype == 1
+                {
+                    using (NpgsqlConnection cn = new NpgsqlConnection(conntect))
+                    {
+                        using (NpgsqlCommand cmd = new NpgsqlCommand())
+                        {
+                            cmd.CommandText = string.Format(sql, DatabaseName);
+                            cmd.Parameters.Add("@Area", UnitSerialNumber);
+                            cmd.Parameters.Add("@Year", year);
+                            cmd.Parameters.Add("@Datetime", datetime);
+                            cn.Open();
+                            cmd.ExecuteNonQuery();
+                        }
+                    }
+                }
+            }
+            catch (System.Exception e) { }
+            return -1;
+
+        }
+        public static void runProcClearRedis(int dbtype, string UnitSerialNumber, string DatabaseName, string CurrentCity, int modle, SqlConnection connection)
+        {
+            try
+            {
+                SqlParameter[] parms = { new SqlParameter("@Area", UnitSerialNumber), new SqlParameter("@type", modle) };
+                TddyLocalDBHelper.ExecuteTddyNonQuery(connection, null, CommandType.StoredProcedure, CurrentCity + "." + "[Proc_ClearRedis]", parms);
+            }
+            catch (System.Exception ex) { }
+
+        }
+
+        public static void runProcGeoJson(int dbtype, string UnitSerialNumber, string DatabaseName, string CurrentCity, SqlConnection connection)
+        {
+            SqlParameter[] parms = { new SqlParameter("@Area", UnitSerialNumber) };
+            TddyLocalDBHelper.ExecuteTddyNonQuery(connection, null, CommandType.StoredProcedure, CurrentCity + "." + "[Proc_Get_GeoJson]", parms);
+        }
+
+        public static void runPowerFlowResult(int dbtype, SqlConnection connection, string UnitSerialNumber, string DatabaseName, string CurrentCity)
+        {
+            SqlParameter[] parms = { new SqlParameter("@Area", UnitSerialNumber) };
+            TddyLocalDBHelper.ExecuteTddyNonQuery(connection, null, CommandType.StoredProcedure, CurrentCity + "." + "[PowerFlowResult]", parms);
+        }
+
+        public static void runProcAreaInitialization(SqlConnection connection, string UnitSerialNumber, string DatabaseName, string CurrentCity)
+        {
+            try
+            {
+                SqlParameter[] parms = { new SqlParameter("@CountyID", UnitSerialNumber) };
+                TddyLocalDBHelper.ExecuteTddyNonQuery(connection, null, CommandType.StoredProcedure, CurrentCity + "." + "[Proc_AreaInitialization]", parms);
+            }
+            catch (System.Exception ex) { }
+        }
+
+        public static void runProcDeleteInvalidRecord(SqlConnection connection, SqlTransaction sqltransaction, string UnitSerialNumber, string DatabaseName, string CurrentCity)
+        {
+            try
+            {
+                SqlParameter[] parms = { new SqlParameter("@Area", UnitSerialNumber) };
+                TddyLocalDBHelper.ExecuteTddyNonQuery(connection, sqltransaction, CommandType.StoredProcedure, CurrentCity + "." + "[Proc_DeleteInvalidRecord]", parms);
+            }
+            catch (System.Exception ex) { }
+        }
+
+        public static string runProcCloudCalc(string UnitSerialNumber, string DatabaseName, string RedisIP, string RedisPass, int Port, int db, int IsOpenRedis, int clienttype, string password, string dbuser, string CurrentCity, string CurrentArea, int PresentYear, int modle, SqlConnection connection)
+        {
+            SqlCommand command;
+            string message;
+            try
+            {
+                command = new SqlCommand("[dbo].[Proc_CloudCalc]", connection);
+                command.CommandTimeout = 0;
+                command.CommandType = CommandType.StoredProcedure;
+                command.Parameters.Add("@message", SqlDbType.NVarChar, 3900).Direction = ParameterDirection.Output;
+                command.Parameters.AddWithValue("@UnitSerialNumber", UnitSerialNumber);
+                command.Parameters.AddWithValue("@Server", RedisIP);
+                command.Parameters.AddWithValue("@password", password);
+                command.Parameters.AddWithValue("@user", dbuser);
+                command.Parameters.AddWithValue("@GH_SOFT_DIR", @"c:\配电网网格化规划平台\");
+                command.Parameters.AddWithValue("@DatabaseName", CurrentCity);
+                command.Parameters.AddWithValue("@CurrentCity", CurrentCity);
+                command.Parameters.AddWithValue("@CurrentArea", CurrentArea);
+                command.Parameters.AddWithValue("@PresentYear", PresentYear);
+                command.Parameters.AddWithValue("@modle", modle);
+                command.Parameters.AddWithValue("@redisip", RedisIP);
+                command.Parameters.AddWithValue("@redispass", RedisPass);
+                command.Parameters.AddWithValue("@db", db);
+                command.Parameters.AddWithValue("@IsOpenRedis", IsOpenRedis);
+                command.Parameters.AddWithValue("@clienttype", clienttype);
+                command.ExecuteNonQuery();
+                message = command.Parameters["@message"].Value.ToString();
+            }
+            catch (System.Exception e)
+            {
+                message = e.Message;
+            }
+            return message;
+        }
+        /// <summary>
+        /// 恢复数据操作
+        /// </summary>
+        /// <param name="connection"></param>
+        /// <param name="sqltransaction"></param>
+        /// <param name="operation"></param>
+        public static void runProcProcBuildColumns(SqlConnection connection, SqlTransaction sqltransaction, string UnitSerialNumber, string DatabaseName, string CurrentCity)
+        {
+            try
+            {
+                SqlParameter[] parms = null;
+                TddyLocalDBHelper.ExecuteTddyNonQuery(connection, sqltransaction, CommandType.StoredProcedure, CurrentCity + "." + "[Proc_BuildColumns]", parms);
+            }
+            catch (System.Exception ex) { }
+        }
+
+        public static void runProcProjectTopoLine(SqlConnection connection, SqlTransaction sqltransaction, int year, string UnitSerialNumber, string DatabaseName, string CurrentCity)
+        {
+            try
+            {
+                SqlParameter[] parms = { new SqlParameter("@Area", UnitSerialNumber), new SqlParameter("@Year", year) };
+                TddyLocalDBHelper.ExecuteTddyNonQuery(connection, sqltransaction, CommandType.StoredProcedure, CurrentCity + "." + "[Proc_TOPO_project_geo]", parms);
+            }
+            catch (System.Exception ex) { }
+        }
+        public static void runProcLineTopoCheck(SqlConnection connection, SqlTransaction sqltransaction, int year, string ID, string datetime, string UnitSerialNumber, string DatabaseName, string CurrentCity)
+        {
+            try
+            {
+                SqlParameter[] parms = { new SqlParameter("@Area", UnitSerialNumber), new SqlParameter("@Year", year), new SqlParameter("@ID", ID), new SqlParameter("@Datetime", datetime) };
+                TddyLocalDBHelper.ExecuteTddyNonQuery(connection, sqltransaction, CommandType.StoredProcedure, CurrentCity + "." + "[Proc_Line_Topo_Check]", parms);
+            }
+            catch (System.Exception ex) { }
+        }
+
+
+        public static void dropTempTableByName(SqlConnection connection, SqlTransaction sqltransaction, string tablename, string UnitSerialNumber, string DatabaseName, string CurrentCity)
+        {
+            DataTable dt = TddyLocalDBHelper.ExecuteTddyDataTable(connection, null, CommandType.Text, "select name from tempdb..sysobjects where name='" + tablename + "'", null);
+            if (dt != null && dt.Rows.Count > 0) TddyLocalDBHelper.ExecuteTddyNonQuery(connection, null, "DROP TABLE " + tablename, null);
+        }
+
+        public static void runProcCreateProjectAtlases(SqlConnection connection, SqlTransaction sqltransaction, int year, string datetime, string UnitSerialNumber, string DatabaseName, string CurrentCity)
+        {
+            try
+            {
+                SqlParameter[] parms = { new SqlParameter("@Area", UnitSerialNumber), new SqlParameter("@Datetime", datetime), new SqlParameter("@Year", year) };
+                TddyLocalDBHelper.ExecuteTddyNonQuery(connection, sqltransaction, CommandType.StoredProcedure, CurrentCity + "." + "[Proc_CreateProjectAtlases]", parms);
+            }
+            catch (System.Exception ex) { }
+        }
+
+
+        public static void runProcdisable(string UnitSerialNumber, string DatabaseName, string CurrentCity, SqlConnection connection, SqlTransaction sqltransaction = null)
+        {
+            try
+            {
+                TddyLocalDBHelper.ExecuteTddyNonQuery(connection, sqltransaction, CommandType.StoredProcedure, CurrentCity + "." + "[Proc_disable]", null);
+            }
+            catch (System.Exception ex) { }
+        }
+
+        public static void runProcenable(string UnitSerialNumber, string DatabaseName, string CurrentCity, SqlConnection connection, SqlTransaction sqltransaction = null)
+        {
+            try
+            {
+                TddyLocalDBHelper.ExecuteTddyNonQuery(connection, sqltransaction, CommandType.StoredProcedure, CurrentCity + "." + "[Proc_enable]", null);
+            }
+            catch (System.Exception ex) { }
+
+        }
+        public static void runProcBuildTopoGraphMsg_update(int dbtype,string connect,string UnitSerialNumber, string DatabaseName, string CurrentCity, SqlConnection connection, SqlTransaction sqltransaction)
+        {
+            try
+            {
+
+                SqlParameter[] parms = { new SqlParameter("@CountyID", UnitSerialNumber) };
+                
+                TddyLocalDBHelper.ExecuteTddyNonQuery(connection, sqltransaction, CommandType.StoredProcedure, CurrentCity + "." + "[Proc_BuildTopoGraphMsg_update]", parms);
+            }
+            catch (System.Exception ex) { }
+        }
+        public static int runProcChangeFeeder1(string UnitSerialNumber, string DatabaseName, string CurrentCity, SqlConnection connection, SqlTransaction sqltransaction, string newguid, int year, string dw, string oldguid, string guids)
+        {
+            SqlCommand command;
+            try
+            {
+                command = new SqlCommand(CurrentCity + "." + "[Proc_ChangeFeeder1]", connection);
+                command.Transaction = sqltransaction;
+                command.CommandTimeout = 0;
+                command.CommandType = CommandType.StoredProcedure;
+                command.Parameters.AddWithValue("@DW", dw);//单位序号
+                command.Parameters.AddWithValue("@Year", year);
+                command.Parameters.AddWithValue("@OldXH", oldguid);
+                command.Parameters.AddWithValue("@NewXH", newguid);
+                command.Parameters.AddWithValue("@str", guids);
+                command.Parameters.Add("@TF", SqlDbType.Int).Direction = ParameterDirection.Output;
+                command.ExecuteNonQuery();
+                return (int)command.Parameters["@TF"].Value;
+            }
+            catch (System.Exception)
+            {
+            }
+            return 1;
+        }
+        public static void runProcWTKTopo(string DatabaseName, string CurrentCity, SqlConnection connection, SqlTransaction sqltransaction, string guid, int year)
+        {
+            try
+            {
+                SqlParameter[] parms = { new SqlParameter("@Area", guid), new SqlParameter("@Year", year) };
+                TddyLocalDBHelper.ExecuteTddyNonQuery(connection, sqltransaction, CommandType.StoredProcedure, CurrentCity + "." + "[Proc_WTK_Topo]", parms);
+            }
+            catch (System.Exception ex) { }
+        }
+
+        public static void runProcUpdataTopoGaoYa(string ConnectString, string UnitSerialNumber, string DatabaseName, int context, string CurrentCity, int type)
+        {
+            SqlConnection connection = TddyLocalDBHelper.InitSqlConnection(ConnectString, DatabaseName, context);//启动数据库连接
+            SqlTransaction sqltransaction = TddyLocalDBHelper.InitSqlTransaction(connection);//启动数据库事务
+            try
+            {
+                SqlParameter[] parms = { new SqlParameter("@Type", type), new SqlParameter("@Area", UnitSerialNumber) };
+                TddyLocalDBHelper.ExecuteTddyNonQuery(connection, sqltransaction, CommandType.StoredProcedure, CurrentCity + "." + "[Proc_Updata_Topo_GaoYa]", parms);
+                TddyLocalDBHelper.TddyCommit(sqltransaction);
+            }
+            catch (System.Exception ex) { }
+            finally
+            {
+                TddyLocalDBHelper.CloseTrans(sqltransaction);
+            }
+        }
+
+        public static void runProcSolveProblem(string ConnectString, string UnitSerialNumber, string DatabaseName, int context, string CurrentCity, int year, string deviceid, int kind)
+        {
+            SqlConnection connection = TddyLocalDBHelper.InitSqlConnection(ConnectString, DatabaseName, context);//启动数据库连接
+            SqlTransaction sqltransaction = TddyLocalDBHelper.InitSqlTransaction(connection);//启动数据库事务
+            try
+            {
+                SqlParameter[] parms = { new SqlParameter("@Area", UnitSerialNumber), new SqlParameter("@Year", year), new SqlParameter("@DeviceID", deviceid), new SqlParameter("@Kind", kind) };
+                TddyLocalDBHelper.ExecuteTddyNonQuery(connection, sqltransaction, CommandType.StoredProcedure, CurrentCity + "." + "[Proc_SolveProblem]", parms);
+                TddyLocalDBHelper.TddyCommit(sqltransaction);
+            }
+            catch (System.Exception ex) { }
+            finally
+            {
+                TddyLocalDBHelper.CloseTrans(sqltransaction);
+            }
+        }
+
+        /// <summary>
+        /// 恢复数据操作
+        /// </summary>
+        /// <param name="connection"></param>
+        /// <param name="sqltransaction"></param>
+        /// <param name="operation"></param>
+        public static void runProcDataUndoByOperation(string UnitSerialNumber, string DatabaseName, string CurrentCity, SqlConnection connection, SqlTransaction sqltransaction, string operation, string redoOrUndo)
+        {
+            try
+            {
+                SqlParameter[] parms = { new SqlParameter("@Operation", operation), new SqlParameter("@UNDOORReUNDO", redoOrUndo) };
+                TddyLocalDBHelper.ExecuteTddyNonQuery(connection, sqltransaction, CommandType.StoredProcedure, CurrentCity + "." + "[Proc_DataUndoByOperation]", parms);
+            }
+            catch (System.Exception ex) { }
+        }
+        /// <summary>
+        /// 回滚数据操作
+        /// </summary>
+        public static void runProcRollBackData(string UnitSerialNumber, string DatabaseName, string CurrentCity, SqlConnection connection, SqlTransaction sqltransaction)
+        {
+            try
+            {
+                SqlParameter[] parms = null;
+                TddyLocalDBHelper.ExecuteTddyNonQuery(connection, sqltransaction, CommandType.StoredProcedure, CurrentCity + "." + "[Proc_RollBackData]", parms);
+            }
+            catch (System.Exception ex) { }
+        }
+
+
+        public static void runProcFuZhiShuJv(string UnitSerialNumber, string DatabaseName, string CurrentCity, SqlConnection connection, SqlTransaction sqltransaction, string DanWeiXuHao, int NianFen)
+        {
+            try
+            {
+                SqlParameter[] parms = { new SqlParameter("@DanWeiXuHao", DanWeiXuHao), new SqlParameter("@NianFen", NianFen) };
+                TddyLocalDBHelper.ExecuteTddyNonQuery(connection, sqltransaction, CommandType.StoredProcedure, CurrentCity + "." + "[Proc_FuZhiShuJv]", parms);
+            }
+            catch (System.Exception ex) { }
+        }
+        public static void runProcCreateAtlasesLine(string DatabaseName, string CurrentCity, SqlConnection connection, SqlTransaction sqltransaction, string DanWeiXuHao, int NianFen)
+        {
+            try
+            {
+                SqlParameter[] parms = { new SqlParameter("@Area", DanWeiXuHao), new SqlParameter("@Year", NianFen) };
+                TddyLocalDBHelper.ExecuteTddyNonQuery(connection, sqltransaction, CommandType.StoredProcedure, CurrentCity + "." + "[Proc_CreateAtlases_Line]", parms);
+            }
+            catch (System.Exception ex) { }
+        }
+        public static void runProcCreateAtlases(string DatabaseName, string CurrentCity, SqlConnection connection, SqlTransaction sqltransaction, string DanWeiXuHao, int NianFen, int nyear)
+        {
+            try
+            {
+                SqlParameter[] parms = { new SqlParameter("@Area", DanWeiXuHao), new SqlParameter("@Year", NianFen), new SqlParameter("@NYear", nyear) };
+                TddyLocalDBHelper.ExecuteTddyNonQuery(connection, sqltransaction, CommandType.StoredProcedure, CurrentCity + "." + "[Proc_CreateAtlases]", parms);
+            }
+            catch (System.Exception ex) { }
+        }
+
+        /// <summary>
+        /// 回滚数据操作
+        /// </summary>
+        /// <param name="connection"></param>
+        /// <param name="sqltransaction"></param>
+        /// <param name="tablename">表名</param>
+        /// <param name="serialnum">序号 英文逗号拼接传递</param>
+        /// <param name="operation">操作,跟List中的一致,不能重复</param>
+        /// <param name="dboperation">数据库操作（INSERT,UPDATE,DELETE）</param>
+        public static void runProcCreateOperation(string UnitSerialNumber, string DatabaseName, string CurrentCity, SqlConnection connection, SqlTransaction sqltransaction, string operation, int year, string cmdName)
+        {
+            try
+            {
+                SqlParameter[] parms = { new SqlParameter("@Operation", operation), new SqlParameter("@OperationYear ", year), new SqlParameter("@CommandType", cmdName), new SqlParameter("@CommandParameter ", "") };
+                TddyLocalDBHelper.ExecuteTddyNonQuery(connection, sqltransaction, CommandType.StoredProcedure, CurrentCity + "." + "[Proc_CreateCurrentOperation]", parms);
+            }
+            catch (System.Exception ex) { }
+        }
+
+
+
+
+        /// <summary>
+        /// 删除指定表指定操作需要回滚的临时表数据
+        /// </summary>
+        /// <param name="connection"></param>
+        /// <param name="sqltransaction"></param>
+        /// <param name="tablename">表名</param>
+        /// <param name="operation">操作,跟List中的一致,不能重复</param>
+        public static void runProcDeleteRollBackData(string UnitSerialNumber, string DatabaseName, string CurrentCity, SqlConnection connection, SqlTransaction sqltransaction, string tablename, string serialnum, string operation, string dboperation)
+        {
+            try
+            {
+                SqlParameter[] parms = { new SqlParameter("@TableName", tablename), new SqlParameter("@Operation", operation) };
+                TddyLocalDBHelper.ExecuteTddyNonQuery(connection, sqltransaction, CommandType.StoredProcedure, CurrentCity + "." + "[Proc_DeleteRollBackData]", parms);
+            }
+            catch (System.Exception ex) { }
+        }
+        /// <summary>
+        /// 打开或退出软件时清空临时表
+        /// </summary>
+        /// <param name="connection"></param>
+        /// <param name="sqltransaction"></param>
+        public static void runProcDropUndoTable(string UnitSerialNumber, string DatabaseName, string CurrentCity, SqlConnection connection, SqlTransaction sqltransaction)
+        {
+            try
+            {
+                SqlParameter[] parms = null;
+                TddyLocalDBHelper.ExecuteTddyNonQuery(connection, sqltransaction, CommandType.StoredProcedure, CurrentCity + "." + "[Proc_DropUndoTable]", parms);
+            }
+            catch (System.Exception ex) { }
+        }
+
+
+        public static void runProcShengChengXiangMuJianYiShu(string UnitSerialNumber, string DatabaseName, string CurrentCity, SqlConnection connection, SqlTransaction sqltransaction = null)
+        {
+            try
+            {
+                SqlParameter[] parms = { new SqlParameter("@Area", UnitSerialNumber) };
+                TddyLocalDBHelper.ExecuteTddyNonQuery(connection, sqltransaction, CommandType.StoredProcedure, CurrentCity + "." + "[Proc_ShengChengXiangMuJianYiShu]", parms);
+            }
+            catch (System.Exception ex) { }
+        }
+        public static void runChangeCommissioningProcedure(string UnitSerialNumber, string DatabaseName, string CurrentCity, SqlConnection connection, SqlTransaction sqltransaction, DelayInfo info)
+        {
+            try
+            {
+                SqlParameter[] parms = { new SqlParameter("@UnitSerialNO", UnitSerialNumber), new SqlParameter("@Type", info.deviceType), new SqlParameter("@Name", info.deviceName), new SqlParameter("@StartYear", info.year), new SqlParameter("@EndYear", info.targetYear) };
+                TddyLocalDBHelper.ExecuteTddyNonQuery(connection, sqltransaction, CommandType.StoredProcedure, CurrentCity + "." + "[Proc_YanChiTouYun]", parms);
+            }
+            catch (System.Exception ex) { }
+        }
+
+        public static void runProcShengChengTaiZhang(string UnitSerialNumber, string DatabaseName, string CurrentCity, SqlConnection connection, SqlTransaction sqltransaction = null)
+        {
+            try
+            {
+                SqlParameter[] parms = { new SqlParameter("@Area", UnitSerialNumber) };
+                TddyLocalDBHelper.ExecuteTddyNonQuery(connection, sqltransaction, CommandType.StoredProcedure, CurrentCity + "." + "[Proc_ShengChengTaiZhang]", parms);
+            }
+            catch (System.Exception ex) { }
+        }
+
+
+        public static void runProcComputeGridindex(string UnitSerialNumber, string DatabaseName, string CurrentCity, SqlConnection connection, SqlTransaction sqltransaction = null)
+        {
+            try
+            {
+                SqlParameter[] parms = { new SqlParameter("@CountyID", UnitSerialNumber), new SqlParameter("@CurrentYear", null) };
+                TddyLocalDBHelper.ExecuteTddyNonQuery(connection, sqltransaction, CommandType.StoredProcedure, CurrentCity + "." + "[Proc_ComputeGridindex]", parms);
+            }
+            catch (System.Exception ex) { }
+        }
+
+        public static void runProcPowerBalance_Upunit(string UnitSerialNumber, string DatabaseName, string CurrentCity, SqlConnection connection, SqlTransaction sqltransaction = null)
+        {
+            try
+            {
+                SqlParameter[] parms2 = { new SqlParameter("@CountyID", UnitSerialNumber), new SqlParameter("@CurrentYear", null) };
+                TddyLocalDBHelper.ExecuteTddyNonQuery(connection, sqltransaction, CommandType.StoredProcedure, CurrentCity + "." + "[Proc_PowerBalance_Upunit]", parms2);
+            }
+            catch (System.Exception ex) { }
+        }
+
+       
+
+        /// <summary>
+        /// 着色
+        /// </summary>
+        /// <param name="type">类型</param>
+        /// <param name="name">名称</param>
+        /// <param name="colorIndex">颜色值</param>
+        public static void runColorPro(string UnitSerialNumber, string DatabaseName, string CurrentCity, string CurrentYear, SqlConnection connection, SqlTransaction sqltransaction, string type, string name, long colorIndex, int intResult)
+        {
+            try
+            {
+                SqlParameter[] parms = { new SqlParameter("@DW", UnitSerialNumber), new SqlParameter("@Year", CurrentYear), new SqlParameter("@Class", type), new SqlParameter("@Name", name), new SqlParameter("@Colour", colorIndex), new SqlParameter("@TF", intResult) };
+                TddyLocalDBHelper.ExecuteTddyNonQuery(connection, sqltransaction, CommandType.StoredProcedure, CurrentCity + "." + "[Proc_ChangeColour]", parms);
+            }
+            catch (System.Exception ex) { }
+        }
+        /// <summary>
+        /// 着色
+        /// </summary>
+        /// <param name="type">类型</param>
+        /// <param name="name">名称</param>
+        /// <param name="colorIndex">颜色值</param>
+        public static void runColorProNew(string UnitSerialNumber, string DatabaseName, string CurrentCity, int CurrentYear, SqlConnection connection, SqlTransaction sqltransaction, string type, string name, long colorIndex, int intResult)
+        {
+            try
+            {
+                SqlParameter[] parms = { new SqlParameter("@DW", UnitSerialNumber), new SqlParameter("@Year", CurrentYear), new SqlParameter("@Class", type), new SqlParameter("@ID", name), new SqlParameter("@Colour", colorIndex), new SqlParameter("@TF", intResult) };
+                TddyLocalDBHelper.ExecuteTddyNonQuery(connection, sqltransaction, CommandType.StoredProcedure, CurrentCity + "." + "[Proc_ChangeColour]", parms);
+            }
+            catch (System.Exception ex) { }
+        }
+        public static void runProcXiuGaiDianLiPingHengBiao(string UnitSerialNumber, string DatabaseName, string CurrentCity, SqlConnection connection, SqlTransaction sqltransaction, string XuHao)
+        {
+            try
+            {
+                SqlParameter[] parms = { new SqlParameter("@XuHao", XuHao) };
+                TddyLocalDBHelper.ExecuteTddyNonQuery(connection, sqltransaction, CommandType.StoredProcedure, CurrentCity + "." + "[Proc_XiuGaiDianLiPingHengBiao]", parms);
+            }
+            catch (System.Exception ex) { }
+        }
+        public static void runProcXiuGaiDianWangZhiBiao(string UnitSerialNumber, string DatabaseName, string CurrentCity, SqlConnection connection, SqlTransaction sqltransaction, string XuHao)
+        {
+            try
+            {
+                SqlParameter[] parms = { new SqlParameter("@XuHao", XuHao) };
+                TddyLocalDBHelper.ExecuteTddyNonQuery(connection, sqltransaction, CommandType.StoredProcedure, CurrentCity + "." + "[Proc_XiuGaiDianWangZhiBiao]", parms);
+            }
+            catch (System.Exception ex) { }
+        }
+
+        public static void runProcReliability(string UnitSerialNumber, string DatabaseName, string CurrentCity, SqlConnection connection, SqlTransaction sqltransaction, string area, int year)
+        {
+            try
+            {
+                SqlParameter[] parms = { new SqlParameter("@Area", area), new SqlParameter("@Year", year) };
+                TddyLocalDBHelper.ExecuteTddyNonQuery(connection, sqltransaction, CommandType.StoredProcedure, CurrentCity + "." + "[Proc_Reliability]", parms);
+            }
+            catch (System.Exception ex) { }
+        }
+        /// <summary>
+        /// 老系统数据转换至新系统
+        /// </summary>
+        /// <param name="area"></param>
+        public static void runProcTransform(string UnitSerialNumber, string DatabaseName, string CurrentCity, SqlConnection connection, SqlTransaction sqltransaction, string area)
+        {
+            try
+            {
+                SqlParameter[] parms = { new SqlParameter("@area", area) };
+                string connString = string.Format("Server=(LocalDB)\\dwgh;Initial Catalog={0};Integrated Security=true", CurrentCity);
+                TddyLocalDBHelper.ExecuteTddyNonQuery(connection, sqltransaction, CommandType.StoredProcedure, CurrentCity + "." + "[Proc_transform_V1]", parms);
+            }
+            catch (System.Exception ex) { }
+        }
+        //-----------------------------------------------------------------------------------------------------
+        /// <summary>
+        /// 初始化设备台账默认值
+        /// </summary>
+        /// <param name="xh">台账序号</param>
+        /// <param name="sblx">台账类型</param>
+        public static void runProcedure(string UnitSerialNumber, string DatabaseName, string CurrentCity, SqlConnection connection, SqlTransaction sqltransaction, string xh, string sblx, string rlgc, string dydj)
+        {
+            try
+            {
+                SqlParameter[] parms = { new SqlParameter("@XuHao", xh), new SqlParameter("@SheBeiLeiXing", sblx), new SqlParameter("@RongLiangGouCheng", rlgc.Equals("") ? null : rlgc), new SqlParameter("@DianYa", dydj) };
+                TddyLocalDBHelper.ExecuteTddyNonQuery(connection, sqltransaction, CommandType.StoredProcedure, CurrentCity + "." + "[Proc_SheZhiQueShengZhi]", parms);
+            }
+            catch (System.Exception ex) { }
+        }
+
+        //-----------------------------------------------------------------------------------------------------
+        /// <summary>
+        /// 生成项目包工程属性
+        /// </summary>
+        /// <param name="xh">项目序号</param>
+        public static void runXMBgclProcedure(string DatabaseName, string CurrentCity, SqlConnection connection, SqlTransaction sqltransaction, string XiangMuBaoMingCheng, string UnitSerialNumber)
+        {
+            try
+            {
+                SqlParameter[] parms = { new SqlParameter("@XiangMuBaoMingCheng", XiangMuBaoMingCheng), new SqlParameter("@DanWeiXuHao", UnitSerialNumber) };
+                string connString = string.Format("Server=(LocalDB)\\dwgh;Initial Catalog={0};Integrated Security=true", CurrentCity);
+                TddyLocalDBHelper.ExecuteTddyNonQuery(connection, sqltransaction, CommandType.StoredProcedure, CurrentCity + "." + "[Proc_XiangMuBaoGongChengLiang]", parms);
+            }
+            catch (System.Exception ex) { }
+        }
+
+        public static void runHuaFenFenQuRightMouse(string UnitSerialNumber, string DatabaseName, string CurrentCity, SqlConnection connection, SqlTransaction sqltransaction = null)
+        {
+            try
+            {
+                SqlParameter[] parms = { new SqlParameter("@DanWeiXuHao", UnitSerialNumber) };
+                string connString = string.Format("Server=(LocalDB)\\dwgh;Initial Catalog={0};Integrated Security=true", CurrentCity);
+                TddyLocalDBHelper.ExecuteTddyNonQuery(connection, sqltransaction, CommandType.StoredProcedure, CurrentCity + "." + "[Proc_HuaFenFenQu]", parms);
+            }
+            catch (System.Exception ex) { }
+        }
+
+        /// <summary>
+        /// 重命名
+        /// </summary>
+        /// <param name="connection">SqlConnection</param>
+        /// <param name="sqltransaction">SqlTransaction</param>
+        /// <param name="dwxh">单位序号</param>
+        /// <param name="tableName">表名</param>
+        /// <param name="oldName">旧的名称</param>
+        /// <param name="newName">新的名称</param>
+        public static void runChangeDeviceName(string UnitSerialNumber, string DatabaseName, string CurrentCity, SqlConnection connection, SqlTransaction sqltransaction, string dwxh, string tableName, string oldName, string newName)
+        {
+            try
+            {
+                SqlParameter[] parms = { new SqlParameter("@Area", dwxh), new SqlParameter("@Tablename", tableName), new SqlParameter("@Oldname", oldName), new SqlParameter("@Changedname", newName) };
+                runChangeDeviceNameProcedure(UnitSerialNumber, DatabaseName, CurrentCity, connection, sqltransaction, "Proc_ChangeDeviceName", parms);
+            }
+            catch (System.Exception ex) { }
+        }
+        public static void runChangeDeviceNameProcedure(string UnitSerialNumber, string DatabaseName, string CurrentCity, SqlConnection connection, SqlTransaction sqltransaction, string procedureName, SqlParameter[] parms)
+        {
+            string connString = string.Format("Server=(LocalDB)\\dwgh;Initial Catalog={0};Integrated Security=true", CurrentCity);
+            TddyLocalDBHelper.ExecuteTddyNonQuery(connection, sqltransaction, CommandType.StoredProcedure, CurrentCity + "." + procedureName, parms);
+        }
+
+        /// <summary>
+        /// </summary>
+        /// <param name="dwxh">单位序号</param>
+        /// <param name="lx">设备类型</param>
+        /// <param name="name">设备名称</param>
+        /// <param name="year">退运年份</param>
+        public static void runProcTuiYun(string UnitSerialNumber, string DatabaseName, string CurrentCity, SqlConnection connection, SqlTransaction sqltransaction, string dwxh, string lx, string name, string year)
+        {
+            try
+            {
+                SqlParameter[] parms = { new SqlParameter("@DW", dwxh), new SqlParameter("@LX", lx), new SqlParameter("@Name", name), new SqlParameter("@year", year) };
+                TddyLocalDBHelper.ExecuteTddyNonQuery(connection, sqltransaction, CommandType.StoredProcedure, CurrentCity + "." + "[Proc_TuiYun]", parms);
+            }
+            catch (System.Exception ex) { }
+        }
+
+        /// <summary>
+        /// </summary>
+        /// <param name="dwxh">单位序号</param>
+        /// <param name="year">操作年份</param>
+        /// <param name="ID">图形序号（多个图形序号用|隔开）</param>
+        public static void runProcHuiFuTouYun(string UnitSerialNumber, string DatabaseName, string CurrentCity, int CurrentYear, SqlConnection connection, SqlTransaction sqltransaction, string id)
+        {
+            try
+            {
+                SqlParameter[] parms = { new SqlParameter("@DW", UnitSerialNumber), new SqlParameter("@Year", CurrentYear), new SqlParameter("@ID", id) };
+                TddyLocalDBHelper.ExecuteTddyNonQuery(connection, sqltransaction, CommandType.StoredProcedure, CurrentCity + "." + "[Proc_HuiFuTouYun]", parms);
+            }
+            catch (System.Exception ex) { }
+        }
+
+
+        /// <summary>
+        /// </summary>
+        /// <param name="dwxh">单位序号</param>
+        /// <param name="xlname">馈线名称</param>
+        /// <param name="year">操作年份</param>
+        /// <param name="ID">图形序号（多个图形序号用|隔开）</param>
+        public static void runProcCheXiaoBianDong(string UnitSerialNumber, string DatabaseName, string CurrentCity, SqlConnection connection, SqlTransaction sqltransaction, string dwxh, string xlname, int year, string id)
+        {
+            try
+            {
+                SqlParameter[] parms = { new SqlParameter("@DW", dwxh), new SqlParameter("@Year", year), new SqlParameter("@XLname", xlname), new SqlParameter("@ID", id) };
+                TddyLocalDBHelper.ExecuteTddyNonQuery(connection, sqltransaction, CommandType.StoredProcedure, CurrentCity + "." + "[Proc_CheXiaoBianDong]", parms);
+            }
+            catch (System.Exception ex) { }
+        }
+
+        public static void runProcServiceArea(SqlConnection connection, string CurrentCity, string UnitSerialNumber, string DatabaseName)
+        {
+            SqlParameter[] parms = { new SqlParameter("@CountyID", UnitSerialNumber) };
+            TddyLocalDBHelper.ExecuteTddyNonQuery(connection, null, CommandType.StoredProcedure, CurrentCity + "." + "[Proc_ServiceArea]", parms);
+        }
+
+        public static void runProcMergeLines(string ConnectString, string UnitSerialNumber, string DatabaseName, int context)
+        {
+            SqlConnection connection = TddyLocalDBHelper.InitSqlConnection(ConnectString, DatabaseName, context);//启动数据库连接
+            try
+            {
+                SqlParameter[] parms = { new SqlParameter("@Area", UnitSerialNumber) };
+                TddyLocalDBHelper.ExecuteTddyNonQuery(connection, null, CommandType.StoredProcedure, DatabaseName + "." + "[Proc_Update_Merge_Lines]", parms);
+
+            }
+            catch (System.Exception ex) { }
+            finally
+            {
+
+            }
+
+        }
+
+        //type=0更新中压线路表
+        //type=1更新线路表
+        //type=2更新开关设施表
+        //type=3更新配电设施表
+        //type=4更新中压线路表供电范围
+        public static void runProc_Updata_Topo(string ConnectString, string UnitSerialNumber, string DatabaseName, int context, int type)
+        {
+            SqlConnection connection = TddyLocalDBHelper.InitSqlConnection(ConnectString, DatabaseName, context);//启动数据库连接
+            //SqlTransaction sqltransaction = TddyLocalDBHelper.InitSqlTransaction(connection);//启动数据库事务
+            try
+            {
+                SqlParameter[] parms = { new SqlParameter("@Type", type), new SqlParameter("@Area", UnitSerialNumber) };
+                TddyLocalDBHelper.ExecuteTddyNonQuery(connection, null, CommandType.StoredProcedure, DatabaseName + "." + "[Proc_Updata_Topo]", parms);
+                //TddyLocalDBHelper.TddyCommit(sqltransaction);
+            }
+            catch (System.Exception ex) { }
+            finally
+            {
+                //TddyLocalDBHelper.CloseTrans(sqltransaction);
+            }
+
+        }
+
+        public static void runProc_LoadAllocate(string UnitSerialNumber, string DatabaseName, SqlConnection connection, SqlTransaction sqltransaction = null)
+        {
+
+            try
+            {
+                SqlParameter[] parms = { new SqlParameter("@CountyID", UnitSerialNumber), new SqlParameter("@Type", 1) };
+                TddyLocalDBHelper.ExecuteTddyNonQuery(connection, sqltransaction, CommandType.StoredProcedure, DatabaseName + "." + "[Proc_SpatialForecast]", parms);
+            }
+            catch (System.Exception ex) { }
+            finally
+            {
+
+            }
+
+        }
+        /// <summary>
+        /// 恢复投运的函数
+        /// </summary>
+        /// <param name="connection"></param>
+        /// <param name="sqltransaction"></param>
+        /// <param name="dwxh"></param>
+        /// <param name="Class"></param>
+        /// <param name="name"></param>
+        public static void runProcResumeDevice(string UnitSerialNumber, string DatabaseName, string CurrentCity, SqlConnection connection, SqlTransaction sqltransaction, string dwxh, string Class, string name)
+        {
+            try
+            {
+                SqlParameter[] parms = { new SqlParameter("@DW", dwxh), new SqlParameter("@Class", Class), new SqlParameter("@Name", name) };
+                TddyLocalDBHelper.ExecuteTddyNonQuery(connection, sqltransaction, CommandType.StoredProcedure, CurrentCity + "." + "[Proc_ResumeDevice]", parms);
+            }
+            catch (System.Exception ex) { }
+        }
+        public static void runProcResumeDeviceNew(string UnitSerialNumber, string DatabaseName, string CurrentCity, SqlConnection connection, SqlTransaction sqltransaction, string dwxh, string Class, string deviceID)
+        {
+            try
+            {
+                SqlParameter[] parms = { new SqlParameter("@DW", dwxh), new SqlParameter("@Class", Class), new SqlParameter("@DeviceID", deviceID) };
+                TddyLocalDBHelper.ExecuteTddyNonQuery(connection, sqltransaction, CommandType.StoredProcedure, CurrentCity + "." + "[Proc_ResumeDevice]", parms);
+            }
+            catch (System.Exception ex) { }
+        }
+
+        /// <summary>
+        /// 更新拓扑所需设备索引信息
+        /// </summary>
+        /// <param name="connection"></param>
+        /// <param name="sqltransaction"></param>
+        public static void runProcBuildTopoGraphMsg(string UnitSerialNumber, string DatabaseName, SqlConnection connection, SqlTransaction sqltransaction)
+        {
+            //try
+            //{
+            //    SqlParameter[] parms = { new SqlParameter("@CountyID ", UnitSerialNumber) };
+            //    TddyLocalDBHelper.ExecuteTddyNonQuery(connection, sqltransaction, CommandType.StoredProcedure, CurrentCity + "." + "[Proc_BuildTopoGraphMsg]", parms);
+
+            //}
+            //catch (System.Exception ex) {  }
+        }
+    }
+}

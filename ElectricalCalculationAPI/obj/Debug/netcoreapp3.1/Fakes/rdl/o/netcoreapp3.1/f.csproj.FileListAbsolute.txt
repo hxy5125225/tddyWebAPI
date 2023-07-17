@@ -1,0 +1,3 @@
+D:\Projects\ElectricalCalculationAPI\obj\Debug\netcoreapp3.1\Fakes\rdl\o\netcoreapp3.1\f.csproj.AssemblyReference.cache
+D:\Projects\ElectricalCalculationAPI\obj\Debug\netcoreapp3.1\Fakes\rdl\o\netcoreapp3.1\f.GeneratedMSBuildEditorConfig.editorconfig
+D:\Projects\ElectricalCalculationAPI\obj\Debug\netcoreapp3.1\Fakes\rdl\o\netcoreapp3.1\f.csproj.CoreCompileInputs.cache

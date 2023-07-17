@@ -1,0 +1,36 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Text;
+
+namespace DBConnector
+{
+    public class TaskClass
+    {
+        public static TaskCompleteStatu GetErrorInfo(string taskId,string sg_code,string qy_id,int is_call_load,string startTime)
+        {
+            TaskCompleteStatu status = new TaskCompleteStatu();
+            status.fail_time = DateTime.Now.ToString("yyyy-MM-dd HH:MM:ss");
+            status.task_fail = 1;
+            status.task_start = 1;
+            status.task_id = taskId;
+            status.sg_code = sg_code;
+            status.qy_id = qy_id;
+            status.is_call_load = is_call_load;
+            status.start_time = startTime;
+            return status;
+        }
+        public static TaskCompleteStatu GetInfo(string taskId, string sg_code, string qy_id, int is_call_load,string startTime)
+        {
+            TaskCompleteStatu status = new TaskCompleteStatu();
+            status.finish_time = DateTime.Now.ToString("yyyy-MM-dd HH:MM:ss");
+            status.task_finish = 1;
+            status.task_start = 1;
+            status.task_id = taskId;
+            status.sg_code = sg_code;
+            status.qy_id = qy_id;
+            status.is_call_load = is_call_load;
+            status.start_time = startTime;
+            return status;
+        }
+    }
+}
