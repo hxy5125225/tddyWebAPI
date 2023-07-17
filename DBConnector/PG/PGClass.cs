@@ -140,6 +140,24 @@ namespace DBConnector.PG
             }
         }
 
+        public static void ExecuteNoneQuery(NpgsqlConnection cn, string sql)
+        {
+            try
+            {
+                if (cn.State != ConnectionState.Open)
+                    cn.Open();
+                using (NpgsqlCommand cmd = new NpgsqlCommand(sql, cn))
+                {
+                    cmd.CommandType = CommandType.Text;
+                    cmd.ExecuteNonQuery();
+                }
+            }
+            catch (Exception e) { }
+            finally {
+                cn.Close();
+            }
+        }
+
         public static int ExecuteNoneQuery(NpgsqlConnection cn, string sql, List<object> objects)
         {
             int nums = 0;
