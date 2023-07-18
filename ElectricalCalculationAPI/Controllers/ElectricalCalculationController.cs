@@ -1,6 +1,9 @@
-﻿using DBConnector.PG;
+﻿using DBConnector;
+using DBConnector.PG;
+using ElectricalCalculationAPI.Entity;
 using Microsoft.AspNetCore.Mvc;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using Npgsql;
 using System.Collections.Generic;
 using System.Data;
@@ -58,5 +61,15 @@ namespace ElectricalCalculationAPI.Controllers
             return PGClass.ExecuteNoneQuery(PGClass.GetPGConn(), sql, values);
         }
 
+        public List<object> ConverDtToDic(DataTable dt) {
+            if (dt == null || dt.Rows.Count == 0) return null;
+            List<object> listObj = new List<object>();
+            dynamic jsonObj = JsonConvert.DeserializeObject(JsonConvert.SerializeObject(dt));
+            foreach (var obj in jsonObj)
+            {
+                listObj.Add(JsonConvert.DeserializeObject<Dictionary<string, object>>(obj.ToString()));
+            }
+            return listObj;
+        }
     }
 }
