@@ -1,6 +1,6 @@
-﻿using DBConnector;
-using DBConnector.PG;
+﻿using DBConnector.PG;
 using Microsoft.AspNetCore.Mvc;
+using Newtonsoft.Json;
 using Npgsql;
 using System.Collections.Generic;
 using System.Data;
@@ -36,19 +36,12 @@ namespace ElectricalCalculationAPI.Controllers
         /// <returns></returns>
         [HttpPost]
         [Route("GetData")]
-        public List<object[]> GetData([FromForm] string sql, [FromForm] List<object> values)
+        public string GetData([FromForm] string sql, [FromForm] List<object> values)
         {
-            //values = new List<object>();
-            //values.Add("a2568ac8-a14e-4ff7-ac6d-714e7f454b0c");
-            //values.Add(5);
             NpgsqlConnection cn = PGClass.GetPGConn();
             DataTable dt = PGClass.QueryNpgDatabase(cn, sql, values);
-            if (dt ==null || dt.Rows.Count ==0) return null;
-            List<object[]> objArrayList = new List<object[]>();
-            for (int i = 0; i < dt.Rows.Count; i++) {
-                objArrayList.Add(dt.Rows[i].ItemArray);
-            }
-            return objArrayList;
+            if (dt ==null || dt.Rows.Count ==0) return "";
+            return JsonConvert.SerializeObject(dt);
         }
 
         /// <summary>
